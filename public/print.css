@@ -1,0 +1,134 @@
+/* A4 인쇄용 디자인 */
+:root {
+  --acc: #1f4e79;
+  --acc-2: #e9eff6;
+  --ink: #16171a;
+  --ink-2: #474a52;
+  --ink-3: #8b8e96;
+  --rule: #cfd3da;
+  --serif: 'Noto Serif KR', 'Nanum Myeongjo', 'Batang', serif;
+  --sans: 'Pretendard Variable', Pretendard, 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+}
+@page {
+  size: A4;
+  margin: 14mm 13mm 16mm;
+  @bottom-center { content: counter(page); font-family: 'Pretendard Variable', sans-serif; font-size: 8.5pt; color: #8b8e96; }
+}
+* { box-sizing: border-box; }
+html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+body { margin: 0; background: #e9e8e4; color: var(--ink); font-family: var(--sans); font-size: 10pt; line-height: 1.6; }
+u { text-decoration-thickness: 1px; text-underline-offset: 3px; }
+
+/* 화면 미리보기: 종이처럼 */
+@media screen {
+  #doc { width: 210mm; margin: 64px auto 40px; background: #fff; padding: 14mm 13mm 16mm; box-shadow: 0 2px 18px rgba(0,0,0,.12); min-height: 297mm; }
+}
+@media print {
+  body { background: #fff; }
+  .no-print { display: none !important; }
+}
+.toolbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 48px; display: flex; align-items: center; gap: 14px; padding: 0 18px;
+  background: #16181d; color: #fff; font-size: 13px; z-index: 10;
+}
+.toolbar .grow { flex: 1; }
+.toolbar button { font: inherit; font-weight: 700; background: #f2c14e; color: #16181d; border: 0; border-radius: 7px; padding: 8px 14px; cursor: pointer; }
+.toolbar label { display: flex; gap: 6px; align-items: center; color: #c9ccd4; }
+
+.draft-mark {
+  position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; z-index: 5;
+  font-size: 90pt; font-weight: 900; color: rgba(179, 38, 30, .08); transform: rotate(-28deg); letter-spacing: .1em;
+}
+
+/* ---------- 머리글 ---------- */
+.masthead { display: grid; grid-template-columns: 1fr auto; gap: 8mm; align-items: end; padding-bottom: 4mm; border-bottom: 2.2pt solid var(--ink); position: relative; }
+.masthead::after { content: ''; position: absolute; left: 0; right: 0; bottom: -4.2pt; border-bottom: .6pt solid var(--ink); }
+.masthead .kicker { font-size: 8.5pt; font-weight: 700; color: var(--acc); letter-spacing: .18em; text-transform: uppercase; margin-bottom: 1.5mm; }
+.masthead .kicker span + span::before { content: '·'; margin: 0 .5em; color: var(--ink-3); }
+.masthead h1 { font-family: var(--serif); font-weight: 900; font-size: 23pt; line-height: 1.15; margin: 0; letter-spacing: -.02em; }
+.masthead h1 small { display: inline-block; font-family: var(--sans); font-size: 11pt; font-weight: 700; color: #fff; background: var(--acc); border-radius: 3pt; padding: 1pt 6pt; margin-left: 3mm; vertical-align: 5pt; letter-spacing: 0; }
+.masthead .meta { font-size: 8.8pt; color: var(--ink-2); margin-top: 1.5mm; }
+.idbox { display: grid; grid-template-columns: auto 26mm; border: .8pt solid var(--ink); font-size: 8.5pt; }
+.idbox div { padding: 1.6mm 2.5mm; border-bottom: .5pt solid var(--rule); }
+.idbox div:nth-child(odd) { background: var(--acc-2); font-weight: 700; color: var(--acc); border-right: .5pt solid var(--rule); }
+.idbox div:nth-last-child(-n+2) { border-bottom: 0; }
+.instructions { font-size: 8.8pt; color: var(--ink-2); margin: 6mm 0 4mm; display: flex; gap: 4mm; flex-wrap: wrap; }
+.instructions b { color: var(--ink); }
+
+/* ---------- 작품 상자 ---------- */
+.passage-head { font-family: var(--serif); font-weight: 700; font-size: 10pt; margin: 5mm 0 2.5mm; }
+.passage-head .range { display: inline-block; background: var(--ink); color: #fff; font-family: var(--sans); font-size: 8.5pt; padding: .5pt 5pt; border-radius: 2pt; margin-right: 2mm; }
+.poem-box { border: .8pt solid var(--ink); padding: 5mm 7mm 4mm; position: relative; break-inside: avoid; margin-bottom: 5mm; }
+.poem-box::before { content: ''; position: absolute; inset: 1.2mm; border: .4pt solid var(--rule); pointer-events: none; }
+.poem-title { text-align: center; font-family: var(--serif); font-weight: 700; font-size: 12pt; margin-bottom: 3mm; }
+.poem-title .author { font-weight: 400; font-size: 9.5pt; color: var(--ink-2); margin-left: 2mm; }
+.poem { font-family: var(--serif); font-size: 10.2pt; line-height: 1.95; white-space: pre-wrap; columns: 2; column-gap: 10mm; column-rule: .4pt dotted var(--rule); }
+.poem.one { columns: 1; max-width: 120mm; margin: 0 auto; }
+.poem .stanza { break-inside: avoid; margin-bottom: 1em; display: block; }
+
+/* ---------- 문항 ---------- */
+.qcols { columns: 2; column-gap: 8mm; column-rule: .5pt solid var(--rule); }
+.qi { break-inside: avoid; margin-bottom: 6mm; font-family: var(--serif); font-size: 9.7pt; line-height: 1.68; }
+.qi .stem { display: grid; grid-template-columns: 7.5mm 1fr; font-weight: 600; margin-bottom: 2mm; }
+.qi .num { font-family: var(--sans); font-weight: 800; color: var(--acc); font-size: 11pt; line-height: 1.4; }
+.qi .diff { font-family: var(--sans); font-size: 7pt; color: var(--ink-3); font-weight: 600; margin-left: 1mm; }
+.qi .box { border: .6pt solid var(--ink); padding: 2.2mm 3mm; margin: 0 0 2.2mm 7.5mm; font-size: 9.2pt; white-space: pre-wrap; }
+.qi .box.bogi { position: relative; padding-top: 3.8mm; margin-top: 3mm; }
+.qi .box.bogi .lbl { position: absolute; top: -2.2mm; left: 50%; transform: translateX(-50%); background: #fff; padding: 0 2mm; font-family: var(--sans); font-size: 8pt; font-weight: 700; letter-spacing: .3em; }
+.qi .box.extra { background: #f7f7f5; border-color: var(--rule); }
+.qi ol { list-style: none; margin: 0 0 0 7.5mm; padding: 0; }
+.qi li { display: grid; grid-template-columns: 5mm 1fr; margin-bottom: .6mm; }
+.section-break { column-span: all; break-before: page; }
+.compact .qi { margin-bottom: 4mm; font-size: 9.3pt; line-height: 1.55; }
+
+/* ---------- 정답·해설 ---------- */
+.quick { width: 100%; border-collapse: collapse; margin: 4mm 0 7mm; font-size: 9pt; break-inside: avoid; }
+.quick th, .quick td { border: .5pt solid var(--rule); text-align: center; padding: 1.3mm 0; }
+.quick th { background: var(--acc-2); color: var(--acc); font-weight: 700; font-size: 8pt; }
+.quick td { font-family: var(--serif); font-weight: 700; font-size: 10.5pt; }
+.h2 { font-family: var(--sans); font-weight: 800; font-size: 11pt; margin: 6mm 0 3mm; display: flex; align-items: center; gap: 2mm; }
+.h2::before { content: ''; width: 3.2mm; height: 3.2mm; background: var(--acc); display: inline-block; }
+.expl { columns: 2; column-gap: 8mm; column-rule: .5pt solid var(--rule); }
+.ex { break-inside: avoid; margin-bottom: 4.5mm; font-size: 8.9pt; line-height: 1.62; }
+.ex .top { display: flex; align-items: center; gap: 2mm; border-bottom: .5pt solid var(--rule); padding-bottom: 1mm; margin-bottom: 1.4mm; }
+.ex .n { font-weight: 800; color: var(--acc); font-size: 10.5pt; }
+.ex .a { font-family: var(--serif); font-weight: 900; background: var(--ink); color: #fff; border-radius: 50%; width: 5.4mm; height: 5.4mm; display: inline-grid; place-items: center; font-size: 8.5pt; }
+.ex .t { color: var(--ink-3); font-size: 7.5pt; margin-left: auto; }
+.ex .body { white-space: pre-wrap; color: #26282d; }
+
+/* ---------- 교안 ---------- */
+.sec { margin-top: 7mm; }
+.sec-h { display: flex; align-items: baseline; gap: 3mm; border-bottom: .8pt solid var(--ink); padding-bottom: 1.4mm; margin-bottom: 3mm; break-after: avoid; }
+.sec-h .no { font-family: var(--sans); font-weight: 900; color: #fff; background: var(--acc); font-size: 9pt; min-width: 6.5mm; height: 6.5mm; display: inline-grid; place-items: center; border-radius: 1.5pt; }
+.sec-h h2 { font-family: var(--serif); font-size: 13pt; margin: 0; font-weight: 900; }
+.dl { display: grid; grid-template-columns: 28mm 1fr; border-top: .5pt solid var(--rule); }
+.dl > div { padding: 1.8mm 2.5mm; border-bottom: .5pt solid var(--rule); white-space: pre-wrap; break-inside: avoid; }
+.dl > div:nth-child(odd) { background: var(--acc-2); font-weight: 700; color: var(--acc); font-size: 9pt; }
+.lines { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+.lines td { border-bottom: .5pt solid var(--rule); padding: 2.2mm 2.5mm; vertical-align: top; white-space: pre-wrap; }
+.lines tr { break-inside: avoid; }
+.lines td.src { width: 38%; font-family: var(--serif); font-weight: 600; background: #fafaf8; border-right: .5pt solid var(--rule); }
+.lines td.memo { width: 24%; border-left: .5pt dashed var(--rule); background-image: repeating-linear-gradient(transparent 0 6.4mm, #dfe2e7 6.4mm 6.7mm); }
+.flow { border-left: 1.5pt solid var(--acc); margin-left: 3mm; padding-left: 5mm; }
+.flow .st { position: relative; margin-bottom: 3.5mm; break-inside: avoid; }
+.flow .st::before { content: ''; position: absolute; left: -6.9mm; top: 1.4mm; width: 2.8mm; height: 2.8mm; border-radius: 50%; background: #fff; border: 1.5pt solid var(--acc); }
+.flow .st b { display: block; color: var(--acc); font-size: 9pt; }
+.flow .st div { white-space: pre-wrap; }
+.board { border: 1pt solid #2d4a3a; background: #f3f7f4; padding: 4mm 5mm; border-radius: 2pt; font-size: 9.5pt; white-space: pre-wrap; line-height: 1.8; }
+.board .bl { font-weight: 700; color: #2d4a3a; margin-bottom: 1mm; }
+.qa { break-inside: avoid; margin-bottom: 3mm; }
+.qa .qq { font-weight: 700; }
+.qa .qq::before { content: 'Q. '; color: var(--acc); }
+.qa .aa { color: var(--ink-2); padding-left: 5mm; white-space: pre-wrap; }
+.plist .pi { display: grid; grid-template-columns: 22mm 1fr; gap: 3mm; padding: 1.8mm 0; border-bottom: .5pt dotted var(--rule); break-inside: avoid; white-space: pre-wrap; }
+.plist .pi .pl { font-weight: 700; color: var(--acc); }
+.summary { border: 1pt solid var(--acc); background: var(--acc-2); padding: 4mm 5mm; border-radius: 2pt; }
+.summary .pi { border-bottom-color: #c7d3e2; }
+.check .ci { display: grid; grid-template-columns: 7mm 1fr; padding: 2mm 0; border-bottom: .5pt dotted var(--rule); break-inside: avoid; }
+.check .ci .cn { font-weight: 800; color: var(--acc); }
+.check .ci .ans { color: var(--ink-3); font-size: 8.5pt; margin-top: .6mm; }
+.blank { color: var(--acc); font-weight: 700; border-bottom: 1pt solid var(--acc); padding: 0 1pt; }
+.blank-line { display: inline-block; border-bottom: .8pt solid var(--ink); height: 1.1em; vertical-align: -2pt; margin: 0 1pt; }
+.answer-key { break-before: page; }
+.answer-key .note { font-size: 8.5pt; color: var(--ink-3); }
+.foot-note { margin-top: 8mm; font-size: 7.8pt; color: var(--ink-3); border-top: .5pt solid var(--rule); padding-top: 2mm; display: flex; justify-content: space-between; }

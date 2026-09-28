@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>인쇄 미리보기</title>
+  <link rel="icon" href="data:," />
+  <link rel="stylesheet" href="/fonts/pretendard/pretendardvariable-dynamic-subset.css" />
+  <link rel="stylesheet" href="/fonts/noto-serif-kr/400.css" />
+  <link rel="stylesheet" href="/fonts/noto-serif-kr/600.css" />
+  <link rel="stylesheet" href="/fonts/noto-serif-kr/700.css" />
+  <link rel="stylesheet" href="/fonts/noto-serif-kr/900.css" />
+  <link rel="stylesheet" href="/print.css" />
+</head>
+<body>
+  <div class="toolbar no-print">
+    <span id="tbTitle"></span>
+    <span class="grow"></span>
+    <label><input type="checkbox" id="tbCompact"> 촘촘하게</label>
+    <button onclick="window.print()">인쇄 / PDF로 저장</button>
+  </div>
+  <div id="doc"></div>
+  <script type="module" src="/print.js"></script>
+</body>
+</html>
