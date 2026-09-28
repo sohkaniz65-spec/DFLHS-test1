@@ -735,7 +735,7 @@ function viewGenerate(el) {
   const p = state.project;
   const noNotes = !p.notes.points.length;
   el.innerHTML = `
-    ${noNotes ? '<div class="callout bad"><b>필기 기준이 아직 없습니다.</b> 필기 없이 만들면 학교 선생님 해석과 어긋나는 문항을 걸러낼 수 없습니다. <a href="#/p/' + p.id + '/notes">학교 필기</a>를 먼저 확정하세요.</div>' : ''}
+    ${noNotes ? '<div class="callout warn"><b>아직 학교 필기가 없습니다.</b> 지금 생성하면 교과서·EBS 등 일반적인 해석으로 먼저 만듭니다. 나중에 <a href="#/p/' + p.id + '/notes">학교 필기</a>를 입력하고 확정하면, 여기에 <b>새 필기로 재검수</b> 버튼이 생깁니다. 그 버튼을 누르면 필기와 어긋나는 문항이 검수 탭에 올라옵니다.</div>' : ''}
     ${!p.poem?.trim() ? '<div class="callout warn">작품 원문이 비어 있습니다. <a href="#/p/' + p.id + '/info">작품·자료</a>에서 원문을 넣어야 시험지에 작품이 인쇄되고 인용 검사도 됩니다.</div>' : ''}
     ${!p.materials.selected.length ? '<div class="callout warn">선택된 참고 자료가 없습니다. 자료 없이도 만들 수 있지만, 자료가 있으면 내용이 더 풍부해집니다.</div>' : ''}
     <div class="grid4">
@@ -751,7 +751,7 @@ function viewGenerate(el) {
           ${s.made ? `<div class="small muted">${fmtDate(s.at)} 생성${o.kind === 'set' ? ` · 살아있는 문항 ${s.live}/${s.target}` : ''}${s.pending ? ` · <b style="color:var(--warn)">검수 필요 ${s.pending}</b>` : ''}</div>` : ''}
           <div data-jobslot="${key}"></div><div data-jobslot="${vkey}"></div>
           <div class="row">
-            <button class="btn" data-gen="${o.key}" data-needidle="${key}" ${noNotes ? 'data-off disabled' : ''}>${s.made ? '다시 생성' : '생성'}</button>
+            <button class="btn" data-gen="${o.key}" data-needidle="${key}">${s.made ? '다시 생성' : '생성'}</button>
             ${s.made && s.stale ? `<button class="btn warn" data-reverify="${o.key}" data-needidle="${vkey}">새 필기로 재검수</button>` : ''}
             ${s.made ? `<a class="btn ghost" href="#/p/${p.id}/review/${o.key}">검수하러 가기</a>` : ''}
           </div>
@@ -767,8 +767,9 @@ function viewGenerate(el) {
   el.querySelectorAll('[data-gen]').forEach((b) => (b.onclick = () => {
     const o = OUTPUTS.find((x) => x.key === b.dataset.gen);
     if (outputState(p, o).made && !confirm(`${o.title}을(를) 다시 만들면 지금 내용과 검수 결과가 모두 바뀝니다. 계속할까요?`)) return;
+    if (noNotes && !confirm('학교 필기 없이 일반적인 해석으로 먼저 만듭니다.\n나중에 필기를 확정한 뒤 "새 필기로 재검수"를 누르면 필기와 어긋나는 문항을 걸러낼 수 있습니다.\n\n계속할까요?')) return;
     run(b, async () => {
-      const r = await api(`/api/projects/${p.id}/generate/${o.key}`, { method: 'POST', body: {} });
+      const r = await api(`/api/projects/${p.id}/generate/${o.key}`, { method: 'POST', body: { allowWithoutNotes: noNotes } });
       trackJob(r.jobId, 'gen:' + o.key, reloadProject);
       updateJobViews();
     });
