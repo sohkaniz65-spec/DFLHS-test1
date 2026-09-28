@@ -11,7 +11,7 @@ export function esc(s) {
  * mode: 'answer'(정답 강조) | 'blank'(빈칸) | 'plain'
  */
 export function rich(s, mode = 'answer') {
-  let h = esc(s).replace(/&lt;u&gt;/g, '<u>').replace(/&lt;\/u&gt;/g, '</u>');
+  let h = esc(s).replace(/&lt;(\/?)(u|b)&gt;/g, '<$1$2>');
   h = h.replace(/\{\{([^{}]+)\}\}/g, (m, inner) => {
     if (mode === 'blank') {
       const w = Math.max(4, Math.min(16, [...inner].length * 1.6));
@@ -20,10 +20,12 @@ export function rich(s, mode = 'answer') {
     if (mode === 'plain') return inner;
     return `<span class="blank">${inner}</span>`;
   });
-  // 열리고 닫히지 않은 <u> 정리
-  const open = (h.match(/<u>/g) || []).length;
-  const close = (h.match(/<\/u>/g) || []).length;
-  if (open > close) h += '</u>'.repeat(open - close);
+  // 열리고 닫히지 않은 <u>·<b> 정리
+  for (const t of ['u', 'b']) {
+    const open = (h.match(new RegExp(`<${t}>`, 'g')) || []).length;
+    const close = (h.match(new RegExp(`</${t}>`, 'g')) || []).length;
+    if (open > close) h += `</${t}>`.repeat(open - close);
+  }
   return h;
 }
 

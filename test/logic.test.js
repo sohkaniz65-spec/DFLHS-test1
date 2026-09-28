@@ -38,7 +38,7 @@ test('문항 정리: 선지 번호 제거, 형식 오류 표시', () => {
 });
 
 test('서식: HTML 은 막고 <u> 와 빈칸만 살린다', () => {
-  assert.equal(rich('<script>x</script><u>밑줄</u>'), '&lt;script&gt;x&lt;/script&gt;<u>밑줄</u>');
+  assert.equal(rich('<script>x</script><u>밑줄</u><b>굵게</b>'), '&lt;script&gt;x&lt;/script&gt;<u>밑줄</u><b>굵게</b>');
   assert.match(rich('주제는 {{성찰}}', 'blank'), /blank-line/);
   assert.equal(rich('주제는 {{성찰}}', 'plain'), '주제는 성찰');
   assert.equal(rich('<u>열림'), '<u>열림</u>');

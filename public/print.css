@@ -157,3 +157,25 @@ u { text-decoration-thickness: 1px; text-underline-offset: 3px; }
 .tp-notes li.sc { color: var(--school); font-weight: 600; }
 .tp-notes li.sc::before { content: '●'; font-size: 6pt; top: 1mm; color: var(--school); }
 .tp-notes.wide li { margin-bottom: 1.6mm; break-inside: avoid; }
+
+/* ---------- 가리온 확정 디자인 보강 ---------- */
+:root { --hl: #dbe6f5; }
+body { color: #2b2b2e; }
+.masthead .kicker { letter-spacing: .08em; text-transform: none; }
+.masthead .kicker .chip { display: inline-block; background: var(--acc); color: #fff; border-radius: 1.2mm; padding: .3mm 2mm; margin-right: 2mm; font-weight: 600; letter-spacing: .08em; }
+.masthead .kicker span + span::before { content: none; }
+.dl > div:nth-child(odd) { text-align: center; }
+/* 자습서식 형광 밑줄 + 번호 */
+.hl { background: linear-gradient(transparent 58%, var(--hl) 58%); border-bottom: .8pt solid var(--acc); padding: 0 .3mm; }
+.hl sup { font-family: var(--sans); font-size: 6.5pt; font-weight: 700; color: var(--acc); margin-left: .3mm; }
+.tp-notes li.mt { padding-left: 0; }
+.tp-notes li.mt::before { content: none; }
+.tp-notes .nn { color: var(--acc); font-weight: 700; margin-right: 1mm; }
+.tp-notes .tg { display: inline-block; font-family: var(--sans); font-size: 6.8pt; font-weight: 700; color: var(--acc); border: .6pt solid var(--acc); border-radius: 1mm; padding: 0 1.1mm; margin-right: 1.2mm; vertical-align: 1pt; }
+.tp-notes .tg.ex { background: var(--acc); color: #fff; }
+.tp-notes .gl { display: inline-block; color: var(--acc); margin-right: 1.5mm; }
+.tp-notes.wide li { padding-left: 0; }
+.tp-notes.wide li::before { content: none; }
+.tp-notes li.one { margin-top: 3mm; padding: 3mm 4mm; background: var(--acc-2); border-left: 1.4mm solid var(--acc); }
+.ex .body .wrong { display: block; color: var(--acc); margin-top: .8mm; }
+.legend .hl { font-size: 8.5pt; }

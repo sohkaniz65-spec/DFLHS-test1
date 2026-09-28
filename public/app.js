@@ -264,6 +264,7 @@ async function renderSettings() {
       <div class="fields">
         <div><label class="f">학원(브랜드) 이름</label><input name="academyName" value="${esc(s.academyName)}" placeholder="예: ○○국어"></div>
         <div><label class="f">강사 이름</label><input name="teacherName" value="${esc(s.teacherName)}"></div>
+        <div><label class="f">머리말 꼬리표</label><input name="chip" value="${esc(s.chip || '')}" placeholder="가리온문학"></div>
         <div><label class="f">대표 색상</label><input name="accent" type="color" value="${esc(s.accent)}" style="height:40px;padding:4px"></div>
       </div>
       <div class="row end"><button class="btn">저장</button></div>
@@ -1066,7 +1067,7 @@ function reviewTeacher(el) {
   const doc = p.docs.teacher;
   const stale = (doc.verifiedNotesVersion ?? 0) < p.notes.version;
   const excluded = v.excluded;
-  const matNote = (n) => `<li class="mt"><span>${rich(n.text)}</span> <span class="ops"><button class="btn ghost sm" data-editnote="${n.id}">수정</button><button class="btn bad sm" data-delnote="${n.id}">삭제</button></span></li>`;
+  const matNote = (n) => `<li class="mt"><span>${n.tag ? `<span class="badge acc">${esc(n.tag)}</span> ` : ''}${n.phrase ? `<b>‘${esc(n.phrase)}’</b> ` : ''}${rich(n.text)}</span> <span class="ops"><button class="btn ghost sm" data-editnote="${n.id}">수정</button><button class="btn bad sm" data-delnote="${n.id}">삭제</button></span></li>`;
   const schoolNote = (s) => `<li class="sc">${s.examPoint ? '★ ' : ''}${s.showTarget ? `<b>‘${esc(s.target)}’</b> ` : ''}${esc(s.text)} <span class="badge bad">${esc(s.id)}</span></li>`;
   el.innerHTML = `
     <div class="callout small"><b style="color:#c62828">빨간색</b>은 학교 필기(확정본 원문 그대로), 검은색은 자습서·자료에서 모은 해석입니다. 학교 필기를 고치려면 <a href="#/p/${p.id}/notes">학교 필기</a> 탭에서 고치면 바로 반영됩니다.</div>

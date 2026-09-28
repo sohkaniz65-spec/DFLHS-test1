@@ -57,8 +57,8 @@ app.post('/api/claude/login/code', wrap(async (req, res) => {
 
 app.get('/api/settings', wrap(async (req, res) => res.json(await getSettings())));
 app.put('/api/settings', wrap(async (req, res) => {
-  const { academyName, teacherName, accent } = req.body;
-  res.json(await updateSettings((s) => ({ ...s, academyName: academyName ?? s.academyName, teacherName: teacherName ?? s.teacherName, accent: accent ?? s.accent })));
+  const { academyName, teacherName, accent, chip } = req.body;
+  res.json(await updateSettings((s) => ({ ...s, academyName: academyName ?? s.academyName, teacherName: teacherName ?? s.teacherName, accent: accent ?? s.accent, chip: chip ?? s.chip })));
 }));
 
 // ---------- 자료실 ----------
