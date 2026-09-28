@@ -800,7 +800,9 @@ function viewGenerate(el) {
           ${s.made ? `<div class="small muted">${fmtDate(s.at)} 생성${o.kind === 'set' ? ` · 살아있는 문항 ${s.live}/${s.target}` : ''}${s.excluded ? ` · 필기와 어긋나 뺀 자료 해석 ${s.excluded}개` : ''}${o.kind === 'doc' && s.stale ? ' · <b style="color:var(--warn)">필기가 바뀌었습니다. 다시 생성하면 새 필기로 자료 해석을 다시 거릅니다 (학교 필기 자체는 이미 반영됨)</b>' : ''}${s.pending ? ` · <b style="color:var(--warn)">검수 필요 ${s.pending}</b>` : ''}</div>` : ''}
           <div data-jobslot="${key}"></div><div data-jobslot="${vkey}"></div>
           <div class="row">
-            <button class="btn" data-gen="${o.key}" data-needidle="${key}">${s.made ? '다시 생성' : '생성'}</button>
+            ${o.key === 'teacher' && !p.poem?.trim()
+              ? `<a class="btn ghost" href="#/p/${p.id}/info">먼저 원문 넣기</a>`
+              : `<button class="btn" data-gen="${o.key}" data-needidle="${key}">${s.made ? '다시 생성' : '생성'}</button>`}
             ${s.made && s.stale && o.kind === 'set' ? `<button class="btn warn" data-reverify="${o.key}" data-needidle="${vkey}">새 필기로 재검수</button>` : ''}
             ${s.made ? `<a class="btn ghost" href="#/p/${p.id}/review/${o.key}">${o.kind === 'doc' ? '확인·수정' : '검수하러 가기'}</a>` : ''}
           </div>

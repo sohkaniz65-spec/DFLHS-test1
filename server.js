@@ -190,6 +190,7 @@ app.delete('/api/projects/:id', wrap(async (req, res) => {
 // 자료 찾기 / 선택
 app.post('/api/projects/:id/search', wrap(async (req, res) => {
   const p = await getProject(req.params.id);
+  if (!p) throw bad('작품을 찾을 수 없습니다. 왼쪽 작품 목록에서 다시 골라 주세요.');
   res.json({ results: await searchLibrary(p) });
 }));
 
