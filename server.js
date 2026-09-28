@@ -7,11 +7,11 @@ import {
   ensureDirs, getSettings, updateSettings, getLibrary, readLibraryText, listProjects, getProject,
   saveNewProject, updateProject, deleteProject, newId, UPLOAD_TMP_DIR,
 } from './lib/store.js';
-import { addUploadedFile, scanFolder, removeFolderFiles, deleteLibraryFile, ocrLibraryFile } from './lib/library.js';
-import { searchLibrary, suggestAliases } from './lib/search.js';
+import { addUploadedFile, scanFolder, extractFiles, removeFolderFiles, deleteLibraryFile, ocrLibraryFile } from './lib/library.js';
+import { searchLibrary, suggestAliases, norm } from './lib/search.js';
 import {
   SET_DEFS, DOC_DEFS, startJob, getJob, listJobs, structureNotes, transcribeImage, extractPoem,
-  generateLesson, reverifyLesson, generateSet, refillSet, reverifySet, reverifyOne, cleanQuestion,
+  generateTeacher, generateSet, refillSet, reverifySet, reverifyOne, cleanQuestion,
 } from './lib/pipeline.js';
 import { apiStatus } from './lib/claude.js';
 import { renderPdf } from './lib/pdfExport.js';
@@ -51,7 +51,40 @@ app.put('/api/settings', wrap(async (req, res) => {
 // ---------- 자료실 ----------
 app.get('/api/library', wrap(async (req, res) => {
   const [lib, settings] = await Promise.all([getLibrary(), getSettings()]);
-  res.json({ files: lib.files, folders: settings.folders });
+  const q = norm(String(req.query.q || ''));
+  const counts = {};
+  const perFolder = {};
+  for (const f of lib.files) {
+    counts[f.status] = (counts[f.status] || 0) + 1;
+    if (f.source === 'folder') perFolder[f.root] = (perFolder[f.root] || 0) + 1;
+  }
+  // 파일이 수만 개일 수 있으므로: 검색어가 없으면 올린 파일과 읽어 둔 파일만, 있으면 이름 검색 결과만
+  const list = q
+    ? lib.files.filter((f) => norm(f.relPath || f.name).includes(q))
+    : lib.files.filter((f) => f.source === 'upload' || f.status !== 'indexed');
+  res.json({
+    files: list.slice(0, 300), shown: Math.min(list.length, 300), matched: list.length, total: lib.files.length,
+    matchedUnread: q ? list.filter((f) => f.status === 'indexed').length : 0,
+    counts, folders: settings.folders.map((p) => ({ path: p, count: perFolder[p] || 0 })),
+  });
+}));
+
+// 이름 검색에 걸린 "아직 안 읽은" 파일을 모두 읽어 둔다 (예: 자습서 폴더를 한 번 읽어 두면 이후 본문 검색이 된다)
+app.post('/api/library/extract-query', wrap(async (req, res) => {
+  const q = norm(String(req.body.q || ''));
+  if (!q) throw bad('검색어가 필요합니다.');
+  const lib = await getLibrary();
+  const ids = lib.files.filter((f) => f.status === 'indexed' && norm(f.relPath || f.name).includes(q)).map((f) => f.id);
+  if (!ids.length) throw bad('새로 읽을 파일이 없습니다.');
+  const job = startJob('library', 'extract', `파일 ${ids.length}개 읽기`, (progress) => extractFiles(ids, progress));
+  res.json({ jobId: job.id, count: ids.length });
+}));
+
+app.post('/api/library/extract', wrap(async (req, res) => {
+  const ids = [].concat(req.body.ids || []);
+  if (!ids.length) throw bad('읽을 파일을 고르세요.');
+  const job = startJob('library', 'extract', `파일 ${ids.length}개 읽기`, (progress) => extractFiles(ids, progress));
+  res.json({ jobId: job.id });
 }));
 
 app.get('/api/library/:id/text', wrap(async (req, res) => {
@@ -264,7 +297,7 @@ app.post('/api/projects/:id/generate/:what', wrap(async (req, res) => {
   if (!p) throw bad('없는 프로젝트입니다.');
   if (!req.body.allowWithoutNotes) needNotes(p);
   let job;
-  if (DOC_DEFS[what]) job = startJob(id, 'gen:' + what, DOC_DEFS[what].label + ' 생성', (pr) => generateLesson(id, what, pr));
+  if (what === 'teacher') job = startJob(id, 'gen:teacher', '교사용 교안 생성', (pr) => generateTeacher(id, pr));
   else if (SET_DEFS[what]) job = startJob(id, 'gen:' + what, SET_DEFS[what].label + ' 생성', (pr) => generateSet(id, what, pr));
   else throw bad('알 수 없는 생성 종류: ' + what);
   res.json({ jobId: job.id });
@@ -273,8 +306,7 @@ app.post('/api/projects/:id/generate/:what', wrap(async (req, res) => {
 app.post('/api/projects/:id/reverify/:what', wrap(async (req, res) => {
   const { id, what } = req.params;
   let job;
-  if (DOC_DEFS[what]) job = startJob(id, 'verify:' + what, DOC_DEFS[what].label + ' 재검수', (pr) => reverifyLesson(id, what, pr));
-  else if (SET_DEFS[what]) job = startJob(id, 'verify:' + what, SET_DEFS[what].label + ' 재검수', (pr) => reverifySet(id, what, pr));
+  if (SET_DEFS[what]) job = startJob(id, 'verify:' + what, SET_DEFS[what].label + ' 재검수', (pr) => reverifySet(id, what, pr));
   else throw bad('알 수 없는 종류: ' + what);
   res.json({ jobId: job.id });
 }));
@@ -336,36 +368,39 @@ app.put('/api/projects/:id/sets/:set/marked-poem', wrap(async (req, res) => {
   }));
 }));
 
-// 교안 항목 수정 / 대조 이슈 처리
-app.put('/api/projects/:id/docs/:doc/items/:itemId', wrap(async (req, res) => {
-  const { id, doc, itemId } = req.params;
-  res.json(await updateProject(id, (p) => {
-    const d = p.docs[doc];
-    const item = d?.content.sections.flatMap((s) => s.items).find((it) => it.id === itemId);
-    if (!item) throw bad('교안 항목을 찾을 수 없습니다.');
-    if ('label' in req.body) item.label = req.body.label;
-    if ('text' in req.body) item.text = req.body.text;
-    item.edited = true;
+// 교사용 교안: 자료 필기 수정·삭제, 빠진(충돌) 해석 되살리기
+function findTeacherNote(doc, noteId) {
+  const c = doc?.content;
+  if (!c) return null;
+  return [...c.overview, ...c.general, ...c.lines.flatMap((l) => l.notes)].find((n) => n.id === noteId) || null;
+}
+
+app.put('/api/projects/:id/docs/teacher/notes/:noteId', wrap(async (req, res) => {
+  res.json(await updateProject(req.params.id, (p) => {
+    const n = findTeacherNote(p.docs.teacher, req.params.noteId);
+    if (!n) throw bad('필기 항목을 찾을 수 없습니다.');
+    if ('text' in req.body) n.text = String(req.body.text);
+    if ('label' in req.body) n.label = String(req.body.label);
+    if ('deleted' in req.body) n.deleted = Boolean(req.body.deleted);
+    n.edited = true;
   }));
 }));
 
-app.post('/api/projects/:id/docs/:doc/issues/:issueId', wrap(async (req, res) => {
-  const { id, doc, issueId } = req.params;
-  const { action } = req.body; // apply | ignore | restore
-  res.json(await updateProject(id, (p) => {
-    const d = p.docs[doc];
-    const issue = d?.issues.find((x) => x.id === issueId);
-    if (!issue) throw bad('검수 항목을 찾을 수 없습니다.');
-    if (action === 'apply') {
-      const item = d.content.sections.flatMap((s) => s.items).find((it) => it.id === issue.itemId);
-      if (item) {
-        issue.before = item.text;
-        item.text = issue.suggestion;
-      }
-      issue.decision = 'applied';
-    } else if (action === 'ignore') issue.decision = 'ignored';
-    else if (action === 'restore') issue.decision = 'pending';
-    else throw bad('알 수 없는 동작');
+app.post('/api/projects/:id/docs/teacher/excluded/:xid', wrap(async (req, res) => {
+  const { action } = req.body; // restore | exclude
+  res.json(await updateProject(req.params.id, (p) => {
+    const d = p.docs.teacher;
+    const x = d?.excluded.find((e) => e.id === req.params.xid);
+    if (!x) throw bad('항목을 찾을 수 없습니다.');
+    if (action === 'restore' && x.decision !== 'restored') {
+      const n = { id: newId('n_'), label: '되살림', text: x.text, restoredFrom: x.id };
+      d.content.general.push(n);
+      x.decision = 'restored';
+      x.noteId = n.id;
+    } else if (action === 'exclude' && x.decision === 'restored') {
+      d.content.general = d.content.general.filter((n) => n.id !== x.noteId);
+      x.decision = 'excluded';
+    }
   }));
 }));
 
@@ -374,10 +409,11 @@ app.get('/api/projects/:id/pdf/:doc', wrap(async (req, res) => {
   const { id, doc } = req.params;
   const p = await getProject(id);
   if (!p) throw bad('없는 프로젝트입니다.');
-  const url = `http://127.0.0.1:${PORT}/print.html?project=${encodeURIComponent(id)}&doc=${encodeURIComponent(doc)}`;
+  const gap = /^(normal|wide|wider)$/.test(req.query.gap || '') ? `&gap=${req.query.gap}` : '';
+  const url = `http://127.0.0.1:${PORT}/print.html?project=${encodeURIComponent(id)}&doc=${encodeURIComponent(doc)}${gap}`;
   const pdf = await renderPdf(url);
   const names = {
-    teacher: '교사용교안', student: '학생용교안', 'student-key': '학생용교안_정답본', clinic: '클리닉테스트', 'clinic-answers': '클리닉정답해설',
+    teacher: '교사용교안', student: '학생용교안', clinic: '클리닉테스트', 'clinic-answers': '클리닉정답해설',
     homework: '과제물100', 'homework-answers': '과제물정답해설',
   };
   const filename = `${p.title}_${names[doc] || doc}.pdf`;

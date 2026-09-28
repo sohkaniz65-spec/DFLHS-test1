@@ -1,4 +1,4 @@
-import { esc, rich, CIRCLED, STATUS_LABEL, DECISION_LABEL, liveQuestions } from './shared.js';
+import { esc, rich, CIRCLED, STATUS_LABEL, DECISION_LABEL, liveQuestions, teacherView } from './shared.js';
 
 const $app = document.getElementById('app');
 const state = { status: null, projects: [], project: null, jobs: new Map(), search: null, sub: {} };
@@ -222,41 +222,40 @@ async function renderSettings() {
 // ---------------- 자료실 ----------------
 const FILE_STATUS = {
   ok: ['읽음', 'ok'],
+  indexed: ['목록만 (아직 안 읽음)', ''],
   scan: ['스캔본·이미지', 'warn'],
   empty: ['내용 없음', ''],
   error: ['오류', 'bad'],
 };
 
 async function renderLibrary() {
-  const lib = await api('/api/library');
   const filter = state.sub.libFilter || '';
-  const files = lib.files
-    .filter((f) => !filter || (f.relPath || f.name).toLowerCase().includes(filter.toLowerCase()))
-    .sort((a, b) => (a.relPath || a.name).localeCompare(b.relPath || b.name, 'ko'));
-  const counts = lib.files.reduce((m, f) => ((m[f.status] = (m[f.status] || 0) + 1), m), {});
+  const lib = await api('/api/library?q=' + encodeURIComponent(filter));
+  const files = lib.files.sort((a, b) => (a.relPath || a.name).localeCompare(b.relPath || b.name, 'ko'));
+  const counts = lib.counts;
 
   $app.innerHTML = `
-    <div class="page-head"><div><h1>자료실</h1><div class="sub">여기 모인 자료에서 작품별 관련 자료를 자동으로 찾습니다. 모든 자료는 이 컴퓨터에만 저장됩니다.</div></div></div>
+    <div class="page-head"><div><h1>자료실</h1><div class="sub">폴더를 연결하면 <b>파일 이름 목록만</b> 만들어 둡니다. 내용은 작품별로 고른 파일만 읽으므로 수백 GB 폴더도 괜찮습니다.</div></div></div>
     <div class="grid2">
       <div class="card">
         <div class="card-head"><h3>① OneDrive 폴더 연결 (권장)</h3></div>
-        <p class="small">공유받은 OneDrive 폴더를 이 컴퓨터에 동기화해 두면, 그 폴더 경로만 등록해서 통째로 읽습니다. 새 파일이 생기면 <b>다시 읽기</b>만 누르면 됩니다.</p>
-        <details class="small"><summary>폴더 경로 찾는 법</summary>
+        <p class="small">공유받은 OneDrive 폴더를 이 컴퓨터에 동기화한 뒤 그 폴더 경로를 넣으세요. 파일을 내려받지 않고 이름 목록만 만듭니다. 새 파일이 생기면 <b>목록 새로고침</b>을 누르세요.</p>
+        <details class="small"><summary>폴더 경로 찾는 법 (맥)</summary>
           <ol style="padding-left:18px">
-            <li>웹 OneDrive → <b>공유됨</b> → 공유받은 폴더 → <b>내 파일에 바로 가기 추가</b></li>
-            <li>PC의 OneDrive 폴더에 그 폴더가 나타납니다.</li>
-            <li>파일 탐색기에서 그 폴더를 열고 주소창을 클릭해 경로를 복사합니다. 예: <span class="kbd">C:\\Users\\이름\\OneDrive\\국어자료</span></li>
+            <li>웹 OneDrive → <b>공유됨</b> → 원장님이 공유한 폴더 → <b>내 파일에 바로 가기 추가</b></li>
+            <li>맥의 OneDrive 앱이 켜져 있으면 Finder 왼쪽 <b>OneDrive</b> 아래에 그 폴더가 나타납니다. (파일은 필요할 때만 내려받음 상태로 두세요)</li>
+            <li>Finder에서 그 폴더를 <b>우클릭 → Option 키를 누른 채 "경로 이름 복사"</b>를 누르고 아래에 붙여 넣습니다.<br>보통 <span class="kbd">/Users/이름/Library/CloudStorage/OneDrive-…/폴더명</span> 모양입니다.</li>
           </ol>
         </details>
         <form id="folderForm" class="row" style="margin-top:8px">
-          <input name="path" placeholder="C:\\Users\\...\\OneDrive\\공유폴더" style="flex:1;min-width:220px">
+          <input name="path" placeholder="/Users/이름/Library/CloudStorage/OneDrive-…/폴더" style="flex:1;min-width:220px">
           <button class="btn">연결</button>
         </form>
         <div data-jobslot="scan" style="margin-top:6px"></div>
         ${lib.folders.length ? `<div class="stack" style="margin-top:12px">${lib.folders.map((f) => `
-          <div class="row"><span class="kbd" style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(f)}</span>
-          <button class="btn bad sm" data-unfolder="${esc(f)}">연결 해제</button></div>`).join('')}
-          <div class="row end"><button class="btn ghost sm" id="rescan" data-needidle="scan">모든 폴더 다시 읽기</button></div></div>` : ''}
+          <div class="row"><span class="kbd" style="flex:1;overflow:hidden;text-overflow:ellipsis">${esc(f.path)}</span><span class="small muted">${f.count.toLocaleString()}개</span>
+          <button class="btn bad sm" data-unfolder="${esc(f.path)}">연결 해제</button></div>`).join('')}
+          <div class="row end"><button class="btn ghost sm" id="rescan" data-needidle="scan">목록 새로고침</button></div></div>` : ''}
       </div>
       <div class="card">
         <div class="card-head"><h3>② 파일 직접 올리기</h3></div>
@@ -273,9 +272,13 @@ async function renderLibrary() {
     </div>
     <div class="card">
       <div class="card-head">
-        <h3>자료 ${lib.files.length}개 <span class="small muted">· 읽음 ${counts.ok || 0} · 스캔본 ${counts.scan || 0} · 오류 ${counts.error || 0}</span></h3>
-        <input id="libFilter" placeholder="파일 이름 검색" value="${esc(filter)}" style="max-width:240px">
+        <h3>자료 ${lib.total.toLocaleString()}개 <span class="small muted">· 목록만 ${(counts.indexed || 0).toLocaleString()} · 읽음 ${counts.ok || 0} · 스캔본 ${counts.scan || 0} · 오류 ${counts.error || 0}</span></h3>
+        <input id="libFilter" placeholder="파일·폴더 이름 검색 (예: 쉽게 씌어진)" value="${esc(filter)}" style="max-width:280px">
       </div>
+      <div class="row small muted" style="margin-bottom:8px">${filter ? `"${esc(filter)}" 검색 결과 ${lib.matched.toLocaleString()}개${lib.matched > lib.shown ? ` 중 ${lib.shown}개만 표시` : ''}` : '직접 올린 파일과 읽어 둔 파일만 보여 줍니다. 폴더 파일은 이름으로 검색하세요.'}
+        ${lib.matchedUnread ? `<span class="spacer"></span><button class="btn sm" id="readQuery" data-needidle="extract">안 읽은 ${lib.matchedUnread.toLocaleString()}개 모두 읽어 두기</button>` : ''}</div>
+      <div data-jobslot="extract"></div>
+      ${!filter ? '<div class="callout small"><b>자습서 팁</b> — 자습서처럼 파일 이름에 작품명이 없는 자료는 한 번 읽어 둬야 작품 검색에 걸립니다. 위 검색칸에 <b>자습서</b>(또는 해당 폴더 이름)를 넣고 <b>모두 읽어 두기</b>를 한 번 눌러 두세요. 이후에는 매주 작품 이름만 넣으면 그 안에서 해당 작품 부분만 찾아옵니다. (OneDrive에서는 읽는 파일만 내려받으므로 저장 공간을 확인하세요)</div>' : ''}
       ${counts.scan ? '<div class="callout warn small">스캔본은 글자 정보가 없어 검색되지 않습니다. 중요한 자료만 <b>Claude로 읽기</b>를 누르세요. (장당 API 비용이 듭니다)</div>' : ''}
       ${files.length ? `<table class="t"><thead><tr><th>파일</th><th>상태</th><th>글자 수</th><th></th></tr></thead><tbody>
         ${files.map((f) => `<tr>
@@ -285,6 +288,7 @@ async function renderLibrary() {
           <td style="text-align:right;white-space:nowrap">
             <div data-jobslot="ocr:${f.id}"></div>
             ${f.status === 'scan' || f.ocr ? `<button class="btn ghost sm" data-ocr="${f.id}" data-needidle="ocr:${f.id}">${f.ocr ? '다시 판독' : 'Claude로 읽기'}</button>` : ''}
+            ${f.status === 'indexed' ? `<button class="btn ghost sm" data-extract="${f.id}">읽기</button>` : ''}
             ${f.status === 'ok' ? `<button class="btn ghost sm" data-view="${f.id}">보기</button>` : ''}
             ${f.source === 'upload' ? `<button class="btn bad sm" data-delfile="${f.id}">삭제</button>` : ''}
           </td></tr>`).join('')}
@@ -343,6 +347,19 @@ async function renderLibrary() {
   $app.querySelectorAll('[data-view]').forEach((b) => (b.onclick = () => run(b, async () => {
     const { text } = await api(`/api/library/${b.dataset.view}/text`);
     modal('추출된 텍스트', `<div class="pre small">${esc(text)}</div>`);
+  })));
+  const rq = document.getElementById('readQuery');
+  if (rq) rq.onclick = () => {
+    if (!confirm(`"${filter}" 검색에 걸린 안 읽은 파일 ${lib.matchedUnread}개를 모두 읽습니다. 파일이 많으면 오래 걸릴 수 있습니다. 계속할까요?`)) return;
+    run(rq, async () => {
+      const r = await api('/api/library/extract-query', { method: 'POST', body: { q: filter } });
+      trackJob(r.jobId, 'extract', renderLibrary);
+      updateJobViews();
+    });
+  };
+  $app.querySelectorAll('[data-extract]').forEach((b) => (b.onclick = () => run(b, async () => {
+    const r = await api('/api/library/extract', { method: 'POST', body: { ids: [b.dataset.extract] } });
+    trackJob(r.jobId, 'extract', renderLibrary);
   })));
   $app.querySelectorAll('[data-ocr]').forEach((b) => (b.onclick = () => run(b, async () => {
     const r = await api(`/api/library/${b.dataset.ocr}/ocr`, { method: 'POST' });
@@ -472,36 +489,61 @@ function selectedList(sel) {
   return `<table class="t"><tbody>${[...byFile.values()].map((f) => `<tr><td>${esc(f.name)}</td><td class="muted">${f.n}조각 · ${f.chars.toLocaleString()}자</td></tr>`).join('')}</tbody></table>`;
 }
 
+const TIER_LABEL = { title: ['이름에 작품명', 'acc'], content: ['본문에 작품 언급', 'info'], author: ['이름에 작가만', ''] };
+
 function renderSearch(box) {
   const p = state.project;
   const results = state.search || [];
   const selectedKey = new Set(p.materials.selected.map((m) => m.fileId + ':' + m.chunkIndex));
   const hadSelection = p.materials.selected.length > 0;
   if (!results.length) {
-    box.innerHTML = '<div class="empty">관련 자료를 찾지 못했습니다. 자료실에 파일이 있는지, 제목·다른 표기가 맞는지 확인하세요.</div>';
+    box.innerHTML = '<div class="empty">관련 파일을 찾지 못했습니다. 자료실에 폴더를 연결했는지, 제목·다른 표기가 맞는지 확인하세요.</div>';
     return;
   }
+  const unread = results.filter((r) => r.status === 'indexed');
+  const readable = results.filter((r) => r.chunks.length);
+  const scans = results.filter((r) => r.status === 'scan');
   box.innerHTML = `
-    <p class="small">파일 이름에 작품명이 있으면 파일 전체를, 아니면 작품명·원문 구절이 나오는 부분과 그 앞뒤를 골랐습니다. 필요 없는 것은 체크를 끄세요.</p>
-    ${results.map((r) => `
+    ${unread.length ? `<div class="card flat" style="padding:12px 14px;border-color:#f0c983">
+      <div class="row"><b>아직 안 읽은 파일 ${unread.length}개</b><span class="small muted">— 이름으로 찾은 파일입니다. 읽을 파일을 체크하고 읽기를 누르세요. (OneDrive에서는 이때 그 파일만 내려받습니다)</span></div>
+      <div style="max-height:320px;overflow:auto;margin:8px 0">${unread.map((r) => `<label class="row small" style="margin:3px 0">
+        <input type="checkbox" data-read="${r.fileId}" ${r.tier === 'title' ? 'checked' : ''}> ${badge(TIER_LABEL[r.tier])}
+        <b>${esc(r.name)}</b><span class="muted">${esc(r.relPath)} · ${(r.size / 1048576).toFixed(1)}MB</span></label>`).join('')}</div>
+      <div data-jobslot="extract"></div>
+      <div class="row end"><button class="btn sm" id="readSel" data-needidle="extract">체크한 파일 읽기</button></div></div>` : ''}
+    ${scans.length ? `<div class="callout warn small">스캔본(글자 없는 PDF·사진) ${scans.length}개: ${scans.map((r) => esc(r.name)).join(', ')} — 필요하면 자료실에서 <b>Claude로 읽기</b>를 누르세요.</div>` : ''}
+    ${readable.length ? `<p class="small">읽은 파일에서 작품과 관련된 부분만 골랐습니다. 작은 파일은 전체를, 자습서처럼 큰 파일은 작품이 나오는 쪽과 그 앞뒤만 넣었습니다. 필요 없는 것은 체크를 끄세요.</p>
+    ${readable.map((r) => `
       <div class="card flat" style="padding:12px 14px">
-        <div class="row"><label class="row" style="flex:1"><input type="checkbox" data-file="${r.fileId}" ${r.chunks.some((c) => (hadSelection ? selectedKey.has(r.fileId + ':' + c.index) : true)) ? 'checked' : ''}>
-          <b>${esc(r.name)}</b> ${r.fileHit ? '<span class="badge acc">파일명 일치</span>' : ''} <span class="small muted">${esc(r.relPath)}</span></label>
-          <span class="small muted">${r.chunks.length}조각</span></div>
+        <div class="row"><label class="row" style="flex:1"><input type="checkbox" data-file="${r.fileId}" ${r.chunks.some((c) => (hadSelection ? selectedKey.has(r.fileId + ':' + c.index) : r.tier !== 'author')) ? 'checked' : ''}>
+          <b>${esc(r.name)}</b> ${badge(TIER_LABEL[r.tier])} <span class="small muted">${esc(r.relPath)}</span></label>
+          <span class="small muted">${r.chunks.length}조각 · ${r.chunks.reduce((n, c) => n + c.text.length, 0).toLocaleString()}자</span></div>
         <details><summary>조각 보기·고르기</summary>
           ${r.chunks.map((c) => `<label class="row small" style="align-items:flex-start;margin:6px 0">
-            <input type="checkbox" data-chunk="${r.fileId}:${c.index}" ${(hadSelection ? selectedKey.has(r.fileId + ':' + c.index) : true) ? 'checked' : ''}>
+            <input type="checkbox" data-chunk="${r.fileId}:${c.index}" ${(hadSelection ? selectedKey.has(r.fileId + ':' + c.index) : r.tier !== 'author') ? 'checked' : ''}>
             <span class="pre" style="flex:1;max-height:140px;overflow:auto;background:#f8f7f3;border-radius:6px;padding:6px 8px">${esc(c.text)}</span></label>`).join('')}
         </details>
       </div>`).join('')}
-    <div class="row end"><button class="btn" id="saveSel">선택한 자료 저장</button></div>`;
+    <div class="row end"><button class="btn" id="saveSel">선택한 자료 저장</button></div>` : ''}`;
 
+  const readBtn = box.querySelector('#readSel');
+  if (readBtn) readBtn.onclick = () => run(readBtn, async () => {
+    const ids = [...box.querySelectorAll('[data-read]:checked')].map((c) => c.dataset.read);
+    if (!ids.length) throw new Error('읽을 파일을 체크하세요.');
+    const r = await api('/api/library/extract', { method: 'POST', body: { ids } });
+    trackJob(r.jobId, 'extract', async () => {
+      state.search = (await api(`/api/projects/${p.id}/search`, { method: 'POST' })).results;
+      render();
+    });
+    updateJobViews();
+  });
   box.querySelectorAll('[data-file]').forEach((cb) => (cb.onchange = () => {
     box.querySelectorAll(`[data-chunk^="${cb.dataset.file}:"]`).forEach((c) => { c.checked = cb.checked; });
   }));
-  box.querySelector('#saveSel').onclick = (e) => run(e.target, async () => {
+  const save = box.querySelector('#saveSel');
+  if (save) save.onclick = (e) => run(e.target, async () => {
     const selected = [];
-    for (const r of results) {
+    for (const r of readable) {
       for (const c of r.chunks) {
         if (box.querySelector(`[data-chunk="${r.fileId}:${c.index}"]`).checked) {
           selected.push({ fileId: r.fileId, fileName: r.name, relPath: r.relPath, chunkIndex: c.index, text: c.text });
@@ -708,19 +750,19 @@ function bindDraft(el, d) {
 
 // ----- ③ 생성 -----
 const OUTPUTS = [
-  { key: 'teacher', kind: 'doc', title: '교사용 교안', big: '교사용', desc: '작품 개관 · 수업 흐름 · 시구별 해설 · 내신 포인트 · 판서 · 발문' },
-  { key: 'student', kind: 'doc', title: '학생용 교안', big: '학생용', desc: '빈칸 채우기형 개관·해석 · 필기 여백 · 확인 문제' },
+  { key: 'teacher', kind: 'doc', title: '교사용 교안', big: '교사용', desc: '자습서·자료 해석을 시구마다 응축한 필기 + 학교 필기(빨간색). 필기와 어긋나는 자료 해석은 자동으로 빠짐' },
+  { key: 'student', kind: 'poem', title: '학생용 교안', big: '학생용', desc: '시 전문 + 넓은 행간 (수업하면서 채우는 용도). 원문만 있으면 바로 출력' },
   { key: 'clinic', kind: 'set', title: '클리닉 테스트', big: '30문항', desc: '5지선다 객관식 · 정답·해설 포함 · 작품 단독/복합 지문' },
   { key: 'homework', kind: 'set', title: '과제물', big: '100문항', desc: '5지선다 객관식 · 정답·해설 포함 · 클리닉과 겹치지 않게' },
 ];
 
 function outputState(p, o) {
+  if (o.kind === 'poem') return { made: Boolean(p.poem?.trim()), stale: false, pending: 0 };
   const obj = o.kind === 'doc' ? p.docs[o.key] : p.sets[o.key];
   if (!obj) return { made: false };
   const stale = (obj.verifiedNotesVersion ?? 0) < p.notes.version;
   if (o.kind === 'doc') {
-    const pending = obj.issues.filter((i) => i.decision === 'pending').length;
-    return { made: true, stale, pending, at: obj.generatedAt };
+    return { made: true, stale, pending: 0, at: obj.generatedAt, excluded: (obj.excluded || []).filter((x) => x.decision === 'excluded').length };
   }
   const qs = obj.questions;
   return {
@@ -735,7 +777,7 @@ function viewGenerate(el) {
   const p = state.project;
   const noNotes = !p.notes.points.length;
   el.innerHTML = `
-    ${noNotes ? '<div class="callout warn"><b>아직 학교 필기가 없습니다.</b> 지금 생성하면 교과서·EBS 등 일반적인 해석으로 먼저 만듭니다. 나중에 <a href="#/p/' + p.id + '/notes">학교 필기</a>를 입력하고 확정하면, 여기에 <b>새 필기로 재검수</b> 버튼이 생깁니다. 그 버튼을 누르면 필기와 어긋나는 문항이 검수 탭에 올라옵니다.</div>' : ''}
+    ${noNotes ? '<div class="callout warn"><b>아직 학교 필기가 없습니다.</b> 지금 만들면 자료(자습서) 해석만으로 먼저 만듭니다. 나중에 <a href="#/p/' + p.id + '/notes">학교 필기</a>를 확정하면 교사용 교안에 빨간색으로 바로 실리고, <b>새 필기 반영</b> 버튼으로 필기와 어긋나는 자료 해석·문항을 걸러낼 수 있습니다.</div>' : ''}
     ${!p.poem?.trim() ? '<div class="callout warn">작품 원문이 비어 있습니다. <a href="#/p/' + p.id + '/info">작품·자료</a>에서 원문을 넣어야 시험지에 작품이 인쇄되고 인용 검사도 됩니다.</div>' : ''}
     ${!p.materials.selected.length ? '<div class="callout warn">선택된 참고 자료가 없습니다. 자료 없이도 만들 수 있지만, 자료가 있으면 내용이 더 풍부해집니다.</div>' : ''}
     <div class="grid4">
@@ -743,25 +785,32 @@ function viewGenerate(el) {
         const s = outputState(p, o);
         const key = 'gen:' + o.key;
         const vkey = 'verify:' + o.key;
+        if (o.kind === 'poem') {
+          return `<div class="card gen-card">
+            <div class="row"><h3 style="margin:0">${o.title}</h3><span class="spacer"></span>${s.made ? '<span class="badge ok">바로 출력 가능</span>' : '<span class="badge warn">원문 필요</span>'}</div>
+            <div class="big">${o.big}</div><div class="desc">${o.desc}</div>
+            <div class="row">${s.made ? `<a class="btn" href="/print.html?project=${p.id}&doc=student" target="_blank">미리보기·인쇄</a>` : `<a class="btn ghost" href="#/p/${p.id}/info">원문 넣으러 가기</a>`}</div>
+          </div>`;
+        }
         return `<div class="card gen-card">
           <div class="row"><h3 style="margin:0">${o.title}</h3><span class="spacer"></span>
             ${s.made ? (s.stale ? '<span class="badge warn">필기 변경됨 · 재검수 필요</span>' : '<span class="badge ok">생성됨</span>') : '<span class="badge">미생성</span>'}</div>
           <div class="big">${o.big}</div>
           <div class="desc">${o.desc}</div>
-          ${s.made ? `<div class="small muted">${fmtDate(s.at)} 생성${o.kind === 'set' ? ` · 살아있는 문항 ${s.live}/${s.target}` : ''}${s.pending ? ` · <b style="color:var(--warn)">검수 필요 ${s.pending}</b>` : ''}</div>` : ''}
+          ${s.made ? `<div class="small muted">${fmtDate(s.at)} 생성${o.kind === 'set' ? ` · 살아있는 문항 ${s.live}/${s.target}` : ''}${s.excluded ? ` · 필기와 어긋나 뺀 자료 해석 ${s.excluded}개` : ''}${o.kind === 'doc' && s.stale ? ' · <b style="color:var(--warn)">필기가 바뀌었습니다. 다시 생성하면 새 필기로 자료 해석을 다시 거릅니다 (학교 필기 자체는 이미 반영됨)</b>' : ''}${s.pending ? ` · <b style="color:var(--warn)">검수 필요 ${s.pending}</b>` : ''}</div>` : ''}
           <div data-jobslot="${key}"></div><div data-jobslot="${vkey}"></div>
           <div class="row">
             <button class="btn" data-gen="${o.key}" data-needidle="${key}">${s.made ? '다시 생성' : '생성'}</button>
-            ${s.made && s.stale ? `<button class="btn warn" data-reverify="${o.key}" data-needidle="${vkey}">새 필기로 재검수</button>` : ''}
-            ${s.made ? `<a class="btn ghost" href="#/p/${p.id}/review/${o.key}">검수하러 가기</a>` : ''}
+            ${s.made && s.stale && o.kind === 'set' ? `<button class="btn warn" data-reverify="${o.key}" data-needidle="${vkey}">새 필기로 재검수</button>` : ''}
+            ${s.made ? `<a class="btn ghost" href="#/p/${p.id}/review/${o.key}">${o.kind === 'doc' ? '확인·수정' : '검수하러 가기'}</a>` : ''}
           </div>
         </div>`;
       }).join('')}
     </div>
     <div class="card flat small muted">
-      생성은 백그라운드에서 진행되니 다른 탭을 봐도 됩니다. 4가지를 한꺼번에 눌러도 됩니다.<br>
+      생성은 백그라운드에서 진행되니 다른 탭을 봐도 됩니다. 여러 개를 한꺼번에 눌러도 됩니다.<br>
       문항은 <b>출제 설계 → 10문항씩 작성 → 필기 기준으로 한 문항씩 검수</b> 순서로 만들어집니다. 정답 번호는 1~5번이 고르게 나오도록 미리 배정됩니다.<br>
-      예상 비용(대략): 작품 1개에 4종 전체 생성 시 수천~1만 원대 [확인 필요]. 자료 양과 모델 설정에 따라 달라집니다.
+      비용은 선택한 자료 양에 비례합니다. 자습서 조각을 필요한 것만 남길수록 싸고 빠릅니다.
     </div>`;
 
   el.querySelectorAll('[data-gen]').forEach((b) => (b.onclick = () => {
@@ -784,7 +833,7 @@ function viewGenerate(el) {
 // ----- ④ 검수 -----
 function viewReview(el, sub) {
   const p = state.project;
-  const made = OUTPUTS.filter((o) => outputState(p, o).made);
+  const made = OUTPUTS.filter((o) => o.kind !== 'poem' && outputState(p, o).made);
   if (!made.length) {
     el.innerHTML = `<div class="empty">아직 생성된 자료가 없습니다. <a href="#/p/${p.id}/generate">생성</a> 탭에서 먼저 만드세요.</div>`;
     return;
@@ -798,7 +847,7 @@ function viewReview(el, sub) {
     <div id="reviewBody"></div>`;
   const body = el.querySelector('#reviewBody');
   if (cur.kind === 'set') reviewSet(body, cur);
-  else reviewDoc(body, cur);
+  else reviewTeacher(body);
 }
 
 function pointText(id) {
@@ -947,67 +996,67 @@ function editQuestion(setKey, q) {
   };
 }
 
-function reviewDoc(el, o) {
+function reviewTeacher(el) {
   const p = state.project;
-  const doc = p.docs[o.key];
-  const s = outputState(p, o);
-  const issuesByItem = new Map();
-  for (const is of doc.issues) {
-    if (!issuesByItem.has(is.itemId)) issuesByItem.set(is.itemId, []);
-    issuesByItem.get(is.itemId).push(is);
-  }
+  const v = teacherView(p);
+  const doc = p.docs.teacher;
+  const stale = (doc.verifiedNotesVersion ?? 0) < p.notes.version;
+  const excluded = v.excluded;
+  const matNote = (n) => `<li class="mt"><span>${rich(n.text)}</span> <span class="ops"><button class="btn ghost sm" data-editnote="${n.id}">수정</button><button class="btn bad sm" data-delnote="${n.id}">삭제</button></span></li>`;
+  const schoolNote = (s) => `<li class="sc">${s.examPoint ? '★ ' : ''}${s.showTarget ? `<b>‘${esc(s.target)}’</b> ` : ''}${esc(s.text)} <span class="badge bad">${esc(s.id)}</span></li>`;
   el.innerHTML = `
-    ${s.stale ? `<div class="callout warn">필기 기준이 바뀌었습니다. <button class="btn warn sm" data-reverify="${o.key}" data-needidle="verify:${o.key}">새 필기로 재검수</button><div data-jobslot="verify:${o.key}"></div></div>` : ''}
-    ${doc.issues.length ? `<div class="card" style="border-color:#f0c983">
-      <h3>필기 기준과 어긋난 부분 ${s.pending ? `<span class="badge warn">${s.pending}개 남음</span>` : '<span class="badge ok">모두 처리</span>'}</h3>
-      ${doc.issues.map((is) => {
-        const item = doc.content.sections.flatMap((x) => x.items).find((it) => it.id === is.itemId);
-        return `<div class="card flat" style="padding:10px 12px;${is.decision !== 'pending' ? 'opacity:.6' : ''}">
-          <div class="row"><b>${esc(item?.label || is.itemId)}</b> ${is.decision === 'applied' ? '<span class="badge ok">수정 적용</span>' : is.decision === 'ignored' ? '<span class="badge">무시함</span>' : '<span class="badge warn">검수 필요</span>'}</div>
-          <div class="small" style="margin:6px 0"><b>문제</b> ${esc(is.problem)}</div>
-          ${is.conflictPoints.map(pointText).join('')}
-          <div class="grid2 small" style="margin-top:8px">
-            <div><div class="muted">현재</div><div class="pre">${rich(is.decision === 'applied' ? is.before : item?.text || '')}</div></div>
-            <div class="diff-new" style="padding:4px 6px;border-radius:6px"><div class="muted">수정안</div><div class="pre">${rich(is.suggestion)}</div></div>
-          </div>
-          <div class="row end" style="margin-top:6px">
-            ${is.decision === 'pending' ? `<button class="btn ok sm" data-issue="${is.id}" data-a="apply">수정안 적용</button><button class="btn ghost sm" data-issue="${is.id}" data-a="ignore">무시 (현재 유지)</button>` : `<button class="btn ghost sm" data-issue="${is.id}" data-a="restore">되돌리기</button>`}
-          </div></div>`;
-      }).join('')}
-    </div>` : '<div class="callout ok">필기 기준과 어긋난 부분이 발견되지 않았습니다. 그래도 한 번 훑어보세요.</div>'}
+    <div class="callout small"><b style="color:#c62828">빨간색</b>은 학교 필기(확정본 원문 그대로), 검은색은 자습서·자료에서 모은 해석입니다. 학교 필기를 고치려면 <a href="#/p/${p.id}/notes">학교 필기</a> 탭에서 고치면 바로 반영됩니다.</div>
+    ${stale ? `<div class="callout warn">필기 기준이 v${doc.verifiedNotesVersion} → v${p.notes.version} 으로 바뀌었습니다. 빨간 필기는 이미 반영됐고, <b>생성</b> 탭에서 교사용 교안을 다시 만들면 새 필기와 어긋나는 자료 해석이 걸러집니다.</div>` : ''}
+    ${excluded.length ? `<div class="card" style="border-color:#f0c983">
+      <h3>학교 필기와 어긋나서 뺀 자료 해석 ${excluded.length}개</h3>
+      <p class="small muted">교안에는 실리지 않았습니다. 필요한 것만 <b>되살리기</b>를 누르면 "작품 전체" 칸에 실립니다.</p>
+      ${excluded.map((x) => `<div class="card flat" style="padding:10px 12px;${x.decision === 'restored' ? 'opacity:.6' : ''}">
+        <div class="pre small">${rich(x.text)}</div>
+        <div class="small" style="margin:4px 0;color:var(--warn)"><b>뺀 이유</b> ${esc(x.reason)}</div>
+        ${x.conflictPoints.map(pointText).join('')}
+        <div class="row end" style="margin-top:6px">${x.decision === 'restored'
+          ? `<span class="badge ok">되살림</span><button class="btn ghost sm" data-x="${x.id}" data-a="exclude">다시 빼기</button>`
+          : `<button class="btn ghost sm" data-x="${x.id}" data-a="restore">되살리기</button>`}</div></div>`).join('')}
+    </div>` : ''}
     <div class="card">
-      <h2>${esc(doc.content.title)}</h2><p class="muted">${esc(doc.content.subtitle)}</p>
-      ${o.key === 'student' ? '<p class="small muted">{{ }} 로 감싼 말은 인쇄할 때 빈칸이 됩니다. (여기서는 파란 밑줄로 보입니다)</p>' : ''}
-      ${doc.content.sections.map((sec) => `<div class="doc-sec"><h3>${esc(sec.heading)}</h3>
-        ${sec.items.map((it) => `<div class="doc-item ${issuesByItem.get(it.id)?.some((x) => x.decision === 'pending') ? 'flag' : ''}">
-          <div class="lab">${rich(it.label)}</div><div class="txt">${rich(it.text)}</div>
-          <button class="btn ghost sm" data-edititem="${it.id}">수정</button></div>`).join('')}</div>`).join('')}
-    </div>`;
+      <h3>작품 개관</h3>
+      <ul class="tv">${v.overview.map((o) => `<li class="mt"><span><b>${esc(o.label)}</b> ${rich(o.text)}</span> <span class="ops"><button class="btn ghost sm" data-editnote="${o.id}">수정</button><button class="btn bad sm" data-delnote="${o.id}">삭제</button></span></li>`).join('')}</ul>
+    </div>
+    <div class="card">
+      <h3>시구별 필기</h3>
+      ${v.rows.map((r) => `${r.stanzaBreak ? '<hr class="stz">' : ''}<div class="tv-row"><div class="tv-line"><span class="muted small">${r.lineNo}</span> ${esc(r.text)}</div>
+        <ul class="tv">${r.school.map(schoolNote).join('')}${r.material.map(matNote).join('')}${!r.school.length && !r.material.length ? '<li class="muted small">필기 없음</li>' : ''}</ul></div>`).join('')}
+    </div>
+    <div class="card">
+      <h3>작품 전체</h3>
+      <ul class="tv">${v.schoolGeneral.map(schoolNote).join('')}${v.general.map((g) => `<li class="mt"><span>${g.label ? `<b>${esc(g.label)}</b> ` : ''}${rich(g.text)}</span> <span class="ops"><button class="btn ghost sm" data-editnote="${g.id}">수정</button><button class="btn bad sm" data-delnote="${g.id}">삭제</button></span></li>`).join('')}</ul>
+    </div>
+    <div class="row end"><a class="btn" href="/print.html?project=${p.id}&doc=teacher" target="_blank">교사용 교안 미리보기·인쇄</a></div>`;
 
-  el.querySelectorAll('[data-issue]').forEach((b) => (b.onclick = () => run(b, async () => {
-    state.project = { ...(await api(`/api/projects/${p.id}/docs/${o.key}/issues/${b.dataset.issue}`, { method: 'POST', body: { action: b.dataset.a } })), jobs: p.jobs };
+  const allNotes = [...doc.content.overview, ...doc.content.general, ...doc.content.lines.flatMap((l) => l.notes)];
+  el.querySelectorAll('[data-delnote]').forEach((b) => (b.onclick = () => run(b, async () => {
+    state.project = { ...(await api(`/api/projects/${p.id}/docs/teacher/notes/${b.dataset.delnote}`, { method: 'PUT', body: { deleted: true } })), jobs: p.jobs };
     render();
   })));
-  el.querySelectorAll('[data-reverify]').forEach((b) => (b.onclick = () => run(b, async () => {
-    const r = await api(`/api/projects/${p.id}/reverify/${o.key}`, { method: 'POST' });
-    trackJob(r.jobId, 'verify:' + o.key, reloadProject);
-    updateJobViews();
-  })));
-  el.querySelectorAll('[data-edititem]').forEach((b) => (b.onclick = () => {
-    const it = doc.content.sections.flatMap((x) => x.items).find((x) => x.id === b.dataset.edititem);
-    modal('교안 항목 수정', `<form id="itemForm" class="stack">
-      <div><label class="f">제목(라벨)</label><input name="label" value="${esc(it.label)}"></div>
-      <div><label class="f">내용 — 빈칸은 {{정답}}, 밑줄은 &lt;u&gt;…&lt;/u&gt;</label><textarea name="text" style="min-height:220px">${esc(it.text)}</textarea></div>
+  el.querySelectorAll('[data-editnote]').forEach((b) => (b.onclick = () => {
+    const n = allNotes.find((x) => x.id === b.dataset.editnote);
+    modal('필기 수정', `<form id="noteForm" class="stack">
+      ${'label' in n ? `<div><label class="f">제목</label><input name="label" value="${esc(n.label)}"></div>` : ''}
+      <div><label class="f">내용</label><textarea name="text" style="min-height:140px">${esc(n.text)}</textarea></div>
       <div class="row end"><button class="btn">저장</button></div></form>`);
-    document.getElementById('itemForm').onsubmit = (e) => {
+    document.getElementById('noteForm').onsubmit = (e) => {
       e.preventDefault();
       run(e.submitter, async () => {
-        state.project = { ...(await api(`/api/projects/${p.id}/docs/${o.key}/items/${it.id}`, { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) })), jobs: p.jobs };
+        state.project = { ...(await api(`/api/projects/${p.id}/docs/teacher/notes/${n.id}`, { method: 'PUT', body: Object.fromEntries(new FormData(e.target)) })), jobs: p.jobs };
         document.getElementById('modal').hidden = true;
         render();
       });
     };
   }));
+  el.querySelectorAll('[data-x]').forEach((b) => (b.onclick = () => run(b, async () => {
+    state.project = { ...(await api(`/api/projects/${p.id}/docs/teacher/excluded/${b.dataset.x}`, { method: 'POST', body: { action: b.dataset.a } })), jobs: p.jobs };
+    render();
+  })));
 }
 
 // ----- ⑤ 출력 -----
@@ -1015,8 +1064,7 @@ function viewExport(el) {
   const p = state.project;
   const rows = [
     { doc: 'teacher', src: 'teacher', title: '교사용 교안' },
-    { doc: 'student', src: 'student', title: '학생용 교안 (빈칸)' },
-    { doc: 'student-key', src: 'student', title: '학생용 교안 — 정답 채운 본' },
+    { doc: 'student', src: 'student', title: '학생용 교안 (시 전문 + 넓은 행간)' },
     { doc: 'clinic', src: 'clinic', title: '클리닉 테스트 — 문제지' },
     { doc: 'clinic-answers', src: 'clinic', title: '클리닉 테스트 — 정답·해설' },
     { doc: 'homework', src: 'homework', title: '과제물 100 — 문제지' },

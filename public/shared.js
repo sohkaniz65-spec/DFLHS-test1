@@ -45,3 +45,65 @@ export const DECISION_LABEL = {
 export function liveQuestions(set) {
   return (set?.questions || []).filter((q) => q.decision !== 'deleted');
 }
+
+// ---------------- 교사용 교안 합치기 ----------------
+const normText = (s) => String(s || '').toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
+
+/** 원문을 줄 단위로 나누고, 연이 바뀌는 줄을 표시한다. 줄 번호는 빈 줄을 뺀 1부터. */
+export function splitPoem(poem) {
+  const out = [];
+  let stanzaBreak = false;
+  for (const raw of String(poem || '').split('\n')) {
+    const text = raw.trim();
+    if (!text) { stanzaBreak = out.length > 0; continue; }
+    out.push({ lineNo: out.length + 1, text, stanzaBreak });
+    stanzaBreak = false;
+  }
+  return out;
+}
+
+/** 학교 필기 항목이 어느 줄에 대한 것인지: 원문에서 직접 찾고, 못 찾으면 Claude 가 정한 줄, 그래도 없으면 0(작품 전체). */
+function placeSchoolPoint(pt, lines, placement) {
+  const t = normText(pt.target);
+  if (t.length >= 2) {
+    const hit = lines.find((l) => {
+      const n = normText(l.text);
+      return n.includes(t) || (n.length >= 4 && t.includes(n));
+    });
+    if (hit) return hit.lineNo;
+  }
+  const c = Number(placement?.[pt.id]);
+  return c >= 1 && c <= lines.length ? c : 0;
+}
+
+/**
+ * 교사용 교안 화면·인쇄용 데이터: 자료 필기(material) + 학교 필기(school, 원문 그대로).
+ * 학교 필기는 매번 현재 필기 기준에서 다시 붙이므로 필기를 고치면 바로 반영된다.
+ */
+export function teacherView(project) {
+  const doc = project.docs?.teacher;
+  if (!doc) return null;
+  const lines = splitPoem(doc.poemSnapshot || project.poem);
+  const c = doc.content;
+  const rows = lines.map((l) => ({
+    ...l,
+    material: (c.lines.find((x) => x.lineNo === l.lineNo)?.notes || []).filter((n) => !n.deleted),
+    school: [],
+  }));
+  const schoolGeneral = [];
+  for (const pt of project.notes?.points || []) {
+    const lineNo = placeSchoolPoint(pt, lines, c.schoolPlacement);
+    const row = rows.find((r) => r.lineNo === lineNo);
+    const whole = row && normText(pt.target) === normText(row.text);
+    const item = { id: pt.id, examPoint: pt.examPoint, target: pt.target, text: pt.interpretation, showTarget: !whole };
+    if (row) row.school.push(item);
+    else schoolGeneral.push(item);
+  }
+  return {
+    rows,
+    overview: c.overview.filter((n) => !n.deleted),
+    general: c.general.filter((n) => !n.deleted),
+    schoolGeneral,
+    excluded: doc.excluded || [],
+  };
+}

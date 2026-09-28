@@ -1,4 +1,4 @@
-import { esc, rich, CIRCLED, liveQuestions } from './shared.js';
+import { esc, rich, CIRCLED, liveQuestions, splitPoem, teacherView } from './shared.js';
 
 const params = new URLSearchParams(location.search);
 const projectId = params.get('project');
@@ -7,7 +7,7 @@ const draft = params.get('draft') === '1';
 const $doc = document.getElementById('doc');
 
 const DOC_NAMES = {
-  teacher: '교사용 교안', student: '학생용 교안', 'student-key': '학생용 교안 (정답본)',
+  teacher: '교사용 교안', student: '학생용 교안',
   clinic: '클리닉 테스트', 'clinic-answers': '클리닉 테스트 정답·해설',
   homework: '과제물', 'homework-answers': '과제물 정답·해설',
 };
@@ -87,56 +87,38 @@ function renderAnswers(p, settings, setKey) {
       <div class="body">${rich(q.explanation)}</div></div>`).join('')}</div>`;
 }
 
-function renderLesson(p, settings, kind) {
-  const srcKind = kind === 'student-key' ? 'student' : kind;
-  const doc = p.docs[srcKind];
-  const c = doc.content;
-  const mode = kind === 'student' ? 'blank' : 'answer';
-  const student = srcKind === 'student';
-  // 학생용에서는 "(필기 N3)" 같은 근거 표시를 뺀다
-  const clean = (s) => (student ? String(s ?? '').replace(/\s*\(필기\s*N\d+(?:\s*[,·]\s*N\d+)*\)/g, '') : s);
-  const r = (s) => rich(clean(s), mode);
-  let no = 0;
-  const sec = (s) => {
-    no++;
-    let body;
-    switch (s.kind) {
-      case 'overview':
-        body = `<div class="dl">${s.items.map((it) => `<div>${r(it.label)}</div><div>${r(it.text)}</div>`).join('')}</div>`;
-        break;
-      case 'flow':
-        body = `<div class="flow">${s.items.map((it) => `<div class="st"><b>${r(it.label)}</b><div>${r(it.text)}</div></div>`).join('')}</div>`;
-        break;
-      case 'lines':
-      case 'poem':
-        body = `<table class="lines">${s.items.map((it) => `<tr><td class="src">${r(it.label)}</td><td>${r(it.text)}</td>${student ? '<td class="memo"></td>' : ''}</tr>`).join('')}</table>`;
-        break;
-      case 'board':
-        body = `<div class="board">${s.items.map((it) => `${it.label ? `<div class="bl">${r(it.label)}</div>` : ''}<div>${r(it.text)}</div>`).join('')}</div>`;
-        break;
-      case 'questions':
-        body = s.items.map((it) => `<div class="qa"><div class="qq">${r(it.label)}</div><div class="aa">${r(it.text)}</div></div>`).join('');
-        break;
-      case 'check':
-        body = `<div class="check">${s.items.map((it, i) => `<div class="ci"><span class="cn">${i + 1}</span><div>${r(it.label)}${kind !== 'student' ? `<div class="ans">정답: ${r(it.text)}</div>` : ''}</div></div>`).join('')}</div>`;
-        break;
-      case 'summary':
-        body = `<div class="summary plist">${s.items.map((it) => `<div class="pi"><span class="pl">${r(it.label)}</span><span>${r(it.text)}</span></div>`).join('')}</div>`;
-        break;
-      default:
-        body = `<div class="plist">${s.items.map((it) => `<div class="pi"><span class="pl">${r(it.label)}</span><span>${r(it.text)}</span></div>`).join('')}</div>`;
-    }
-    return `<section class="sec"><div class="sec-h"><span class="no">${String(no).padStart(2, '0')}</span><h2>${esc(s.heading)}</h2></div>${body}</section>`;
-  };
-  const checks = student && kind === 'student' ? c.sections.filter((s) => s.kind === 'check') : [];
+// 학생용: 시 전문 + 넓은 행간 (수업 중 필기용). 생성 과정 없이 원문만으로 만든다.
+function renderStudent(p, settings) {
+  const gap = { normal: 9, wide: 14, wider: 20 }[params.get('gap') || 'wide'] || 14;
+  const lines = splitPoem(p.poem);
+  if (!lines.length) throw new Error('작품 원문이 비어 있습니다. 작품·자료 탭에서 원문을 저장하세요.');
   return `
-    ${masthead(p, settings, kind, student ? '학생용' : '교사용', student ? [['이름', ''], ['반 / 번호', '']] : null)}
-    ${c.subtitle ? `<div class="instructions"><span>${esc(c.subtitle)}</span></div>` : ''}
-    ${poemBox(p)}
-    ${c.sections.filter((s) => s.kind !== 'poem' || !p.poem).map(sec).join('')}
-    ${checks.length ? `<section class="answer-key"><div class="sec-h"><span class="no">✓</span><h2>확인 문제 정답</h2></div>
-      <div class="check">${checks.flatMap((s) => s.items).map((it, i) => `<div class="ci"><span class="cn">${i + 1}</span><div>${rich(clean(it.text), 'answer')}</div></div>`).join('')}</div></section>` : ''}
-    <div class="foot-note"><span>${esc(settings.academyName || '')}</span><span>${esc(p.title)} · ${esc(DOC_NAMES[kind])}</span></div>`;
+    ${masthead(p, settings, 'student', '학생용', [['이름', ''], ['반 / 번호', '']])}
+    <div class="stu-poem" style="--gap:${gap}mm">
+      <div class="stu-title">${esc(p.title)}<span class="author">${esc(p.author || '')}</span></div>
+      ${lines.map((l) => `${l.stanzaBreak ? '<div class="stu-stanza"></div>' : ''}<div class="stu-line"><span class="ln">${l.lineNo}</span><span class="tx">${rich(l.text, 'plain')}</span></div>`).join('')}
+    </div>
+    <div class="foot-note"><span>${esc(settings.academyName || '')}</span><span>${esc(p.title)} · 학생용 교안</span></div>`;
+}
+
+// 교사용: 시구 옆에 자료(자습서) 필기 + 학교 필기(빨간색)
+function renderTeacher(p, settings) {
+  const v = teacherView(p);
+  const school = (s) => `<li class="sc">${s.examPoint ? '<b>★</b> ' : ''}${s.showTarget ? `<b>‘${esc(s.target)}’</b> ` : ''}${esc(s.text)}</li>`;
+  const mat = (n) => `<li>${rich(n.text)}</li>`;
+  return `
+    ${masthead(p, settings, 'teacher', '교사용')}
+    <div class="legend"><span><i class="k-sc"></i>학교 필기</span><span><i class="k-mt"></i>자습서·자료 정리</span></div>
+    ${v.overview.length ? `<section class="sec"><div class="sec-h"><span class="no">01</span><h2>작품 개관</h2></div>
+      <div class="dl">${v.overview.map((o) => `<div>${esc(o.label)}</div><div>${rich(o.text)}</div>`).join('')}</div></section>` : ''}
+    <section class="sec"><div class="sec-h"><span class="no">02</span><h2>시구별 필기</h2></div>
+      <div class="tp">${v.rows.map((r) => `${r.stanzaBreak ? '<div class="tp-stanza"></div>' : ''}
+        <div class="tp-row"><div class="tp-line"><span class="ln">${r.lineNo}</span>${esc(r.text)}</div>
+          <ul class="tp-notes">${r.school.map(school).join('')}${r.material.map(mat).join('')}</ul></div>`).join('')}</div>
+    </section>
+    ${v.schoolGeneral.length || v.general.length ? `<section class="sec"><div class="sec-h"><span class="no">03</span><h2>작품 전체</h2></div>
+      <ul class="tp-notes wide">${v.schoolGeneral.map(school).join('')}${v.general.map((g) => `<li>${g.label ? `<b>${esc(g.label)}</b> ` : ''}${rich(g.text)}</li>`).join('')}</ul></section>` : ''}
+    <div class="foot-note"><span>${esc(settings.academyName || '')}</span><span>${esc(p.title)} · 교사용 교안</span></div>`;
 }
 
 async function main() {
@@ -157,12 +139,19 @@ async function main() {
   let html;
   if (docKind === 'clinic' || docKind === 'homework') html = renderTest(p, settings, docKind);
   else if (docKind === 'clinic-answers' || docKind === 'homework-answers') html = renderAnswers(p, settings, docKind.replace('-answers', ''));
-  else if (['teacher', 'student', 'student-key'].includes(docKind)) html = renderLesson(p, settings, docKind);
+  else if (docKind === 'teacher') html = renderTeacher(p, settings);
+  else if (docKind === 'student') html = renderStudent(p, settings);
   else throw new Error('알 수 없는 문서 종류');
   $doc.innerHTML = (draft ? '<div class="draft-mark">검수 전 초안</div>' : '') + html;
 
   const compact = document.getElementById('tbCompact');
   compact.onchange = () => document.body.classList.toggle('compact', compact.checked);
+  if (docKind === 'student') {
+    compact.parentElement.outerHTML = `<label>행간 <select id="tbGap"><option value="normal">보통</option><option value="wide">넓게</option><option value="wider">아주 넓게</option></select></label>`;
+    const gapSel = document.getElementById('tbGap');
+    gapSel.value = params.get('gap') || 'wide';
+    gapSel.onchange = () => { params.set('gap', gapSel.value); location.search = params.toString(); };
+  }
   await document.fonts.ready;
   window.__PRINT_READY = true;
 }

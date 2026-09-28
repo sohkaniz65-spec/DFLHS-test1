@@ -203,3 +203,14 @@ details > summary { cursor: pointer; font-size: 12.5px; color: var(--ink-2); fon
   .q-col + .q-col { border-left: 0; border-top: 1px solid #f0eee9; }
   .doc-item { grid-template-columns: 1fr; }
 }
+
+/* 교사용 교안 확인 화면 */
+.tv { list-style: none; margin: 0; padding: 0; }
+.tv li { display: flex; gap: 8px; justify-content: space-between; align-items: flex-start; padding: 4px 0; font-size: 13.5px; border-bottom: 1px dashed #efece6; }
+.tv li.sc { color: #c62828; font-weight: 600; justify-content: flex-start; }
+.tv li .ops { display: flex; gap: 4px; flex: none; opacity: .35; }
+.tv li:hover .ops { opacity: 1; }
+.tv-row { display: grid; grid-template-columns: 260px 1fr; gap: 14px; padding: 8px 0; border-bottom: 1px solid #f0eee9; }
+.tv-line { font-family: 'Noto Serif KR', serif; font-weight: 600; }
+hr.stz { border: 0; border-top: 2px solid var(--ink); margin: 6px 0; }
+@media (max-width: 900px) { .tv-row { grid-template-columns: 1fr; } }
