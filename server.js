@@ -142,9 +142,16 @@ app.post('/api/library/folders', wrap(async (req, res) => {
 app.post('/api/library/folders/rescan', wrap(async (req, res) => {
   const { folders } = await getSettings();
   const job = startJob('library', 'scan:all', '폴더 다시 읽기', async (progress) => {
+    const errors = [];
     for (const [i, f] of folders.entries()) {
-      await scanFolder(f, (d, t, m) => progress(i, folders.length, `${path.basename(f)} (${d}/${t}) ${m}`));
+      // 한 폴더가 실패해도 나머지 폴더는 계속 읽는다
+      try {
+        await scanFolder(f, (d, t, m) => progress(i, folders.length, `${path.basename(f)}: ${m}`));
+      } catch (err) {
+        errors.push(`${path.basename(f)}: ${err.message}`);
+      }
     }
+    if (errors.length) throw new Error(errors.join(' / '));
     return { folders: folders.length };
   });
   res.json({ jobId: job.id });

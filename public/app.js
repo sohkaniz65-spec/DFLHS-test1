@@ -570,7 +570,7 @@ function renderSearch(box) {
       <div class="row"><b>아직 안 읽은 파일 ${unread.length}개</b><span class="small muted">— 이름으로 찾은 파일입니다. 읽을 파일을 체크하고 읽기를 누르세요. (OneDrive에서는 이때 그 파일만 내려받습니다)</span></div>
       <div style="max-height:320px;overflow:auto;margin:8px 0">${unread.map((r) => `<label class="row small" style="margin:3px 0">
         <input type="checkbox" data-read="${r.fileId}" ${r.tier === 'title' ? 'checked' : ''}> ${badge(TIER_LABEL[r.tier])}
-        <b>${esc(r.name)}</b><span class="muted">${esc(r.relPath)} · ${(r.size / 1048576).toFixed(1)}MB</span></label>`).join('')}</div>
+        <b>${esc(r.name)}</b><span class="muted">${esc(r.relPath)} ${r.size ? ` · ${(r.size / 1048576).toFixed(1)}MB` : ""}</span></label>`).join('')}</div>
       <div data-jobslot="extract"></div>
       <div class="row end"><button class="btn sm" id="readSel" data-needidle="extract">체크한 파일 읽기</button></div></div>` : ''}
     ${scans.length ? `<div class="callout warn small">스캔본(글자 없는 PDF·사진) ${scans.length}개: ${scans.map((r) => esc(r.name)).join(', ')} — 필요하면 자료실에서 <b>Claude로 읽기</b>를 누르세요.</div>` : ''}
