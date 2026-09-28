@@ -43,3 +43,9 @@ test('서식: HTML 은 막고 <u> 와 빈칸만 살린다', () => {
   assert.equal(rich('주제는 {{성찰}}', 'plain'), '주제는 성찰');
   assert.equal(rich('<u>열림'), '<u>열림</u>');
 });
+
+test('맥 파일 이름(NFD 한글)도 검색된다', () => {
+  const nfd = '백석_수라_분석.hwp'.normalize('NFD');
+  assert.notEqual(nfd, '백석_수라_분석.hwp');
+  assert.ok(norm(nfd).includes(norm('수라')));
+});
