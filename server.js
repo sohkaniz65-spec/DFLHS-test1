@@ -13,11 +13,13 @@ import {
   SET_DEFS, DOC_DEFS, startJob, getJob, listJobs, structureNotes, transcribeImage, extractPoem,
   generateTeacher, generateSet, refillSet, reverifySet, reverifyOne, cleanQuestion,
 } from './lib/pipeline.js';
-import { apiStatus, initBackend } from './lib/claude.js';
+import { apiStatus, initBackend, refreshAuth } from './lib/claude.js';
+import { startLogin, submitLoginCode } from './lib/claudeCode.js';
 import { renderPdf } from './lib/pdfExport.js';
 
 await ensureDirs();
 await initBackend();
+await refreshAuth(true);
 
 const app = express();
 const PORT = Number(process.env.PORT || 4173);
@@ -40,7 +42,17 @@ const fixName = (n) => Buffer.from(n, 'latin1').toString('utf8');
 
 // ---------- 상태·설정 ----------
 app.get('/api/status', wrap(async (req, res) => {
+  await refreshAuth(req.query.force === '1');
   res.json({ ...apiStatus(), sets: SET_DEFS, docs: DOC_DEFS });
+}));
+
+// Claude 구독 로그인 (Claude Code)
+app.post('/api/claude/login', wrap(async (req, res) => {
+  res.json(await startLogin());
+}));
+app.post('/api/claude/login/code', wrap(async (req, res) => {
+  submitLoginCode(String(req.body.code || ''));
+  res.json({ ok: true });
 }));
 
 app.get('/api/settings', wrap(async (req, res) => res.json(await getSettings())));
@@ -428,6 +440,6 @@ app.listen(PORT, '127.0.0.1', () => {
   const st = apiStatus();
   console.log(`\n  문학 수업자료 스튜디오 → http://localhost:${PORT}`);
   console.log(`  연결: ${st.mock ? '연습 모드(가짜 데이터)' : st.backend === 'api' ? 'API 키' : 'Claude 구독(Claude Code 로그인)'} · 모델 ${st.model}`);
-  if (!st.ready) console.log(st.backend === 'api' ? '  ⚠ ANTHROPIC_API_KEY 가 없습니다. .env 파일을 확인하세요.' : '  ⚠ Claude Code 를 찾지 못했습니다.');
+  if (!st.ready) console.log(st.backend === 'api' ? '  ⚠ ANTHROPIC_API_KEY 가 없습니다. .env 파일을 확인하세요.' : !st.cli ? '  ⚠ Claude Code 를 찾지 못했습니다.' : '  ⚠ Claude 로그인이 필요합니다. 브라우저 화면의 "Claude 로그인" 버튼을 누르세요.');
   console.log('');
 });

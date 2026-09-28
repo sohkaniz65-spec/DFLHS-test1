@@ -95,16 +95,75 @@ async function reloadProject() {
 // ---------------- 라우팅 ----------------
 window.addEventListener('hashchange', render);
 
-async function boot() {
-  state.status = await api('/api/status');
+function renderLoginBar() {
+  const s = state.status;
+  const bar = document.getElementById('loginBar');
+  if (s.mock || s.backend === 'api' || !s.cli || s.loggedIn) {
+    bar.innerHTML = '';
+    return;
+  }
+  const lg = state.login || {};
+  bar.innerHTML = `<div class="callout bad" style="margin-bottom:20px">
+    <div class="row"><b>Claude 로그인이 필요합니다.</b><span>Max 구독 계정으로 한 번만 로그인하면 됩니다.</span><span class="spacer"></span>
+      <button class="btn sm" id="loginStart">${lg.started ? '로그인 다시 시작' : 'Claude 로그인'}</button></div>
+    ${lg.started ? `<ol class="small" style="margin:10px 0 0;padding-left:18px;line-height:1.9">
+      <li>${lg.url ? `<a href="${esc(lg.url)}" target="_blank"><b>여기를 눌러 로그인 페이지 열기</b></a> (이미 새 탭이 열렸으면 그 탭에서 진행)` : '브라우저에 로그인 페이지가 열렸는지 확인하세요.'}</li>
+      <li>Max 계정으로 로그인하고 <b>승인(Authorize)</b>을 누릅니다.</li>
+      <li>승인 뒤 화면에 <b>코드</b>가 나오면 복사해서 아래에 붙여넣고 <b>완료</b>를 누르세요. 코드 없이 "완료" 화면이 나왔으면 잠시 기다리면 자동으로 바뀝니다.</li>
+    </ol>
+    <form id="loginCode" class="row" style="margin-top:8px"><input name="code" placeholder="인증 코드 붙여넣기" style="flex:1;min-width:220px"><button class="btn sm">완료</button></form>` : ''}
+  </div>`;
+  bar.querySelector('#loginStart').onclick = (e) => run(e.target, async () => {
+    const r = await api('/api/claude/login', { method: 'POST' });
+    state.login = { started: true, url: r.url };
+    if (r.url) window.open(r.url, '_blank');
+    renderLoginBar();
+    pollLogin();
+  });
+  const f = bar.querySelector('#loginCode');
+  if (f) f.onsubmit = (e) => {
+    e.preventDefault();
+    run(e.submitter, async () => {
+      await api('/api/claude/login/code', { method: 'POST', body: { code: new FormData(f).get('code') } });
+      toast('코드를 보냈습니다. 확인 중…');
+      pollLogin();
+    });
+  };
+}
+
+function pollLogin() {
+  clearTimeout(pollLogin.t);
+  let n = 0;
+  const tick = async () => {
+    state.status = await api('/api/status?force=1');
+    if (state.status.loggedIn) {
+      state.login = null;
+      toast('Claude 로그인 완료! 이제 생성할 수 있습니다.');
+      updateStatusBadge();
+      renderLoginBar();
+      render();
+      return;
+    }
+    if (++n < 100) pollLogin.t = setTimeout(tick, 3000);
+  };
+  pollLogin.t = setTimeout(tick, 3000);
+}
+
+function updateStatusBadge() {
   const s = state.status;
   document.getElementById('apiBadge').innerHTML = s.mock
     ? '<span class="dot warn"></span>연습 모드 (가짜 데이터)'
     : !s.ready
-      ? `<span class="dot bad"></span>${s.backend === 'api' ? 'API 키 없음 (.env 확인)' : 'Claude Code 없음'}`
+      ? `<span class="dot bad"></span>${s.backend === 'api' ? 'API 키 없음 (.env 확인)' : !s.cli ? 'Claude Code 없음' : 'Claude 로그인 필요'}`
       : s.backend === 'api'
         ? `<span class="dot"></span>API 키 · ${esc(s.model)}`
         : `<span class="dot"></span>Claude 구독으로 연결 · ${esc(s.model)}`;
+}
+
+async function boot() {
+  state.status = await api('/api/status');
+  updateStatusBadge();
+  renderLoginBar();
   await render();
 }
 
@@ -145,8 +204,8 @@ function renderHome() {
   $app.innerHTML = `
     <div class="page-head"><div><h1>작품 목록</h1><div class="sub">작품 하나당 교사용·학생용 교안, 클리닉 30문항, 과제 100문항을 만듭니다.</div></div></div>
     ${s.mock ? '<div class="callout warn"><b>연습 모드</b>입니다. Claude를 부르지 않고 가짜 데이터로 화면과 인쇄 디자인만 확인할 수 있습니다.</div>' : ''}
-    ${!s.mock && s.backend !== 'api' ? '<div class="callout small">Claude <b>Max 구독</b>으로 생성합니다 (추가 요금 없음, 구독 사용 한도를 함께 씀). 처음 한 번은 프로그램 폴더의 <span class="kbd">login.command</span>를 더블클릭해 로그인해 두세요.</div>' : ''}
-    ${!s.mock && !s.ready ? `<div class="callout bad">${s.backend === 'api' ? '<b>API 키가 없습니다.</b> <span class="kbd">.env</span> 파일에 <span class="kbd">ANTHROPIC_API_KEY</span>를 넣고 다시 실행하세요.' : '<b>Claude Code를 찾지 못했습니다.</b> 검은 창을 닫고 <span class="kbd">start.command</span>를 다시 실행하세요.'}</div>` : ''}
+    ${!s.mock && s.backend !== 'api' ? '<div class="callout small">Claude <b>Max 구독</b>으로 생성합니다 (추가 요금 없음, 구독 사용 한도를 함께 씀). 처음 한 번은 화면 위쪽의 <b>Claude 로그인</b> 버튼으로 로그인해 두세요.</div>' : ''}
+    ${!s.mock && !s.ready ? `<div class="callout bad">${s.backend === 'api' ? '<b>API 키가 없습니다.</b> <span class="kbd">.env</span> 파일에 <span class="kbd">ANTHROPIC_API_KEY</span>를 넣고 다시 실행하세요.' : (!s.cli ? '<b>Claude Code를 찾지 못했습니다.</b> 검은 창을 닫고 <span class="kbd">start.command</span>를 다시 실행하세요.' : '<b>Claude 로그인이 필요합니다.</b> 위의 <b>Claude 로그인</b> 버튼을 누르세요.')}</div>` : ''}
     <div class="grid2">
       <div class="card">
         <h2>새 작품 시작</h2>
@@ -211,7 +270,7 @@ async function renderSettings() {
     </form></div>
     <div class="card"><h3>API 연결</h3>
       <p class="small">연결 방식: <b>${state.status.backend === 'api' ? 'API 키' : 'Claude 구독 (Claude Code 로그인)'}</b> · 모델: <b>${esc(state.status.model)}</b> · 생각 깊이: <b>${esc(state.status.effort)}</b> ${state.status.mock ? '· <span class="badge warn">연습 모드</span>' : ''}</p>
-      <p class="small muted">로그인 계정을 바꾸려면 프로그램 폴더의 <span class="kbd">login.command</span>를 실행하세요. 연결 방식·모델은 <span class="kbd">.env</span> 파일에서 바꿉니다.</p>
+      <p class="small muted">로그인이 풀리면 화면 위쪽에 <b>Claude 로그인</b> 버튼이 나타납니다. 연결 방식·모델은 <span class="kbd">.env</span> 파일에서 바꿉니다.</p>
     </div>`;
   document.getElementById('settingsForm').onsubmit = (e) => {
     e.preventDefault();

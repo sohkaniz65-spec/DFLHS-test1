@@ -1,11 +1,14 @@
 #!/bin/bash
-# Claude Code 로그인 (처음 한 번). Max 구독 계정으로 로그인하면 이 프로그램이 추가 요금 없이 Claude 를 씁니다.
+# Claude 구독(Max) 로그인. 보통은 프로그램 화면의 "Claude 로그인" 버튼을 쓰면 되고, 이 파일은 예비용입니다.
 cd "$(dirname "$0")"
 [ -d node_modules ] || npm install --no-audit --no-fund --loglevel=error
 echo ""
-echo "잠시 뒤 Claude Code 가 열립니다."
-echo "1) 로그인 방법을 물으면 'Claude account with subscription'(구독 계정)을 고르세요."
-echo "2) 브라우저가 열리면 Max 계정으로 로그인 → 승인하세요."
-echo "3) 로그인이 끝나고 입력창이 보이면 /exit 를 입력하고 이 창을 닫으세요."
+echo "브라우저가 열리면 Max 계정으로 로그인 → 승인(Authorize)을 누르세요."
+echo "화면에 코드가 나오면 복사해서 여기에 붙여넣고 엔터를 누르세요."
 echo ""
-./node_modules/.bin/claude
+./node_modules/.bin/claude auth login --claudeai
+echo ""
+./node_modules/.bin/claude auth status --text
+echo ""
+echo "이 창을 닫아도 됩니다."
+read -r
