@@ -13,12 +13,10 @@
 
 1. **Node.js 설치**: https://nodejs.org 에서 LTS 버전을 받아 설치합니다.
 2. 이 폴더를 내 컴퓨터에 받습니다. (GitHub → Code → Download ZIP → 압축 풀기)
-3. **Anthropic API 키**를 발급합니다: https://console.anthropic.com → API Keys. 결제 수단 등록이 필요합니다.
-4. 실행합니다.
-   - Windows: `start.bat` 더블클릭
-   - Mac: `start.command` 더블클릭
-   - 처음 실행하면 `.env` 파일이 열립니다. `ANTHROPIC_API_KEY=` 뒤에 키를 붙여 넣고 저장한 다음 다시 실행하세요.
-5. 브라우저에서 http://localhost:4173 이 열립니다.
+3. 맥: 터미널에서 `git clone https://github.com/sohkaniz65-spec/DFLHS-test1.git ~/Documents/수업자료스튜디오`
+4. 폴더의 `start.command` 더블클릭 → 브라우저에서 http://localhost:4173 이 열립니다. 이후에도 이것만 누르면 **자동으로 최신 버전으로 업데이트**됩니다.
+5. 처음 한 번 `login.command` 더블클릭 → Claude **구독 계정(Max 등)**으로 로그인. 이후 생성은 구독으로 처리되어 추가 요금이 없습니다(구독 사용 한도를 함께 씀).
+   - API 키로 쓰고 싶으면 `.env` 에서 `STUDIO_BACKEND=api`, `ANTHROPIC_API_KEY=` 를 채우세요.
 
 > 키 없이 화면과 인쇄 디자인만 보려면 `.env` 에서 `MOCK_CLAUDE=1` 로 바꾸고 실행하세요. (연습 모드, 가짜 데이터)
 

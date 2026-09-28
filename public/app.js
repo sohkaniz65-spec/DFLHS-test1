@@ -100,9 +100,11 @@ async function boot() {
   const s = state.status;
   document.getElementById('apiBadge').innerHTML = s.mock
     ? '<span class="dot warn"></span>연습 모드 (가짜 데이터)'
-    : s.hasKey
-      ? `<span class="dot"></span>${esc(s.model)} 연결됨`
-      : '<span class="dot bad"></span>API 키 없음 (.env 확인)';
+    : !s.ready
+      ? `<span class="dot bad"></span>${s.backend === 'api' ? 'API 키 없음 (.env 확인)' : 'Claude Code 없음'}`
+      : s.backend === 'api'
+        ? `<span class="dot"></span>API 키 · ${esc(s.model)}`
+        : `<span class="dot"></span>Claude 구독으로 연결 · ${esc(s.model)}`;
   await render();
 }
 
@@ -143,7 +145,8 @@ function renderHome() {
   $app.innerHTML = `
     <div class="page-head"><div><h1>작품 목록</h1><div class="sub">작품 하나당 교사용·학생용 교안, 클리닉 30문항, 과제 100문항을 만듭니다.</div></div></div>
     ${s.mock ? '<div class="callout warn"><b>연습 모드</b>입니다. Claude를 부르지 않고 가짜 데이터로 화면과 인쇄 디자인만 확인할 수 있습니다.</div>' : ''}
-    ${!s.mock && !s.hasKey ? '<div class="callout bad"><b>API 키가 없습니다.</b> 프로그램 폴더의 <span class="kbd">.env</span> 파일에 <span class="kbd">ANTHROPIC_API_KEY</span>를 넣고 다시 실행하세요.</div>' : ''}
+    ${!s.mock && s.backend !== 'api' ? '<div class="callout small">Claude <b>Max 구독</b>으로 생성합니다 (추가 요금 없음, 구독 사용 한도를 함께 씀). 처음 한 번은 프로그램 폴더의 <span class="kbd">login.command</span>를 더블클릭해 로그인해 두세요.</div>' : ''}
+    ${!s.mock && !s.ready ? `<div class="callout bad">${s.backend === 'api' ? '<b>API 키가 없습니다.</b> <span class="kbd">.env</span> 파일에 <span class="kbd">ANTHROPIC_API_KEY</span>를 넣고 다시 실행하세요.' : '<b>Claude Code를 찾지 못했습니다.</b> 검은 창을 닫고 <span class="kbd">start.command</span>를 다시 실행하세요.'}</div>` : ''}
     <div class="grid2">
       <div class="card">
         <h2>새 작품 시작</h2>
@@ -207,8 +210,8 @@ async function renderSettings() {
       <div class="row end"><button class="btn">저장</button></div>
     </form></div>
     <div class="card"><h3>API 연결</h3>
-      <p class="small">모델: <b>${esc(state.status.model)}</b> · 생각 깊이(effort): <b>${esc(state.status.effort)}</b> ${state.status.mock ? '· <span class="badge warn">연습 모드</span>' : ''}</p>
-      <p class="small muted">모델·깊이·API 키는 프로그램 폴더의 <span class="kbd">.env</span> 파일에서 바꿉니다. 바꾼 뒤에는 프로그램을 다시 실행하세요.</p>
+      <p class="small">연결 방식: <b>${state.status.backend === 'api' ? 'API 키' : 'Claude 구독 (Claude Code 로그인)'}</b> · 모델: <b>${esc(state.status.model)}</b> · 생각 깊이: <b>${esc(state.status.effort)}</b> ${state.status.mock ? '· <span class="badge warn">연습 모드</span>' : ''}</p>
+      <p class="small muted">로그인 계정을 바꾸려면 프로그램 폴더의 <span class="kbd">login.command</span>를 실행하세요. 연결 방식·모델은 <span class="kbd">.env</span> 파일에서 바꿉니다.</p>
     </div>`;
   document.getElementById('settingsForm').onsubmit = (e) => {
     e.preventDefault();

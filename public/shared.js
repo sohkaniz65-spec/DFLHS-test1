@@ -64,16 +64,20 @@ export function splitPoem(poem) {
 
 /** 학교 필기 항목이 어느 줄에 대한 것인지: 원문에서 직접 찾고, 못 찾으면 Claude 가 정한 줄, 그래도 없으면 0(작품 전체). */
 function placeSchoolPoint(pt, lines, placement) {
-  const t = normText(pt.target);
+  // 한자 병기 "(六疊房)" 같은 괄호는 빼고 비교한다
+  const plain = (s) => normText(String(s || '').replace(/\([^)]*\)/g, ''));
+  const t = plain(pt.target);
+  const c = Number(placement?.[pt.id]);
+  const claudeLine = c >= 1 && c <= lines.length ? c : 0;
   if (t.length >= 2) {
-    const hit = lines.find((l) => {
-      const n = normText(l.text);
+    const hits = lines.filter((l) => {
+      const n = plain(l.text);
       return n.includes(t) || (n.length >= 4 && t.includes(n));
     });
-    if (hit) return hit.lineNo;
+    // 같은 구절이 여러 번 나오면(수미상관 등) Claude 가 고른 줄을 우선
+    if (hits.length) return (hits.find((l) => l.lineNo === claudeLine) || hits[0]).lineNo;
   }
-  const c = Number(placement?.[pt.id]);
-  return c >= 1 && c <= lines.length ? c : 0;
+  return claudeLine;
 }
 
 /**

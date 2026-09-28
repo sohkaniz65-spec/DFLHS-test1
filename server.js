@@ -13,10 +13,11 @@ import {
   SET_DEFS, DOC_DEFS, startJob, getJob, listJobs, structureNotes, transcribeImage, extractPoem,
   generateTeacher, generateSet, refillSet, reverifySet, reverifyOne, cleanQuestion,
 } from './lib/pipeline.js';
-import { apiStatus } from './lib/claude.js';
+import { apiStatus, initBackend } from './lib/claude.js';
 import { renderPdf } from './lib/pdfExport.js';
 
 await ensureDirs();
+await initBackend();
 
 const app = express();
 const PORT = Number(process.env.PORT || 4173);
@@ -426,7 +427,7 @@ app.get('/api/projects/:id/pdf/:doc', wrap(async (req, res) => {
 app.listen(PORT, '127.0.0.1', () => {
   const st = apiStatus();
   console.log(`\n  문학 수업자료 스튜디오 → http://localhost:${PORT}`);
-  console.log(`  모델: ${st.model} (effort ${st.effort})${st.mock ? '  ※ 연습 모드(가짜 데이터)' : ''}`);
-  if (!st.mock && !st.hasKey) console.log('  ⚠ ANTHROPIC_API_KEY 가 없습니다. .env 파일을 확인하세요.');
+  console.log(`  연결: ${st.mock ? '연습 모드(가짜 데이터)' : st.backend === 'api' ? 'API 키' : 'Claude 구독(Claude Code 로그인)'} · 모델 ${st.model}`);
+  if (!st.ready) console.log(st.backend === 'api' ? '  ⚠ ANTHROPIC_API_KEY 가 없습니다. .env 파일을 확인하세요.' : '  ⚠ Claude Code 를 찾지 못했습니다.');
   console.log('');
 });
