@@ -436,10 +436,19 @@ app.get('/api/projects/:id/pdf/:doc', wrap(async (req, res) => {
   res.end(pdf);
 }));
 
-app.listen(PORT, '127.0.0.1', () => {
+const server = app.listen(PORT, '127.0.0.1', () => {
   const st = apiStatus();
   console.log(`\n  문학 수업자료 스튜디오 → http://localhost:${PORT}`);
   console.log(`  연결: ${st.mock ? '연습 모드(가짜 데이터)' : st.backend === 'api' ? 'API 키' : 'Claude 구독(Claude Code 로그인)'} · 모델 ${st.model}`);
   if (!st.ready) console.log(st.backend === 'api' ? '  ⚠ ANTHROPIC_API_KEY 가 없습니다. .env 파일을 확인하세요.' : !st.cli ? '  ⚠ Claude Code 를 찾지 못했습니다.' : '  ⚠ Claude 로그인이 필요합니다. 브라우저 화면의 "Claude 로그인" 버튼을 누르세요.');
   console.log('');
+});
+server.on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.log(`\n  ⚠ 프로그램이 이미 다른 창에서 켜져 있습니다. 브라우저에서 http://localhost:${PORT} 을 여세요.`);
+    console.log('  (다시 켜려면 열려 있는 검은 터미널 창을 모두 닫은 뒤 start.command 를 실행하세요)\n');
+  } else {
+    console.error('  서버를 시작하지 못했습니다:', err.message);
+  }
+  process.exit(1);
 });
