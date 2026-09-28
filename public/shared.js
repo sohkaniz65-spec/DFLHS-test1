@@ -47,7 +47,7 @@ export function liveQuestions(set) {
 }
 
 // ---------------- 교사용 교안 합치기 ----------------
-const normText = (s) => String(s || '').toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
+const normText = (s) => String(s || '').normalize('NFC').toLowerCase().replace(/[\s\p{P}\p{S}]/gu, '');
 
 /** 원문을 줄 단위로 나누고, 연이 바뀌는 줄을 표시한다. 줄 번호는 빈 줄을 뺀 1부터. */
 export function splitPoem(poem) {
