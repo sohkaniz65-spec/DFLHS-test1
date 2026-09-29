@@ -179,3 +179,59 @@ body { color: #2b2b2e; }
 .tp-notes li.one { margin-top: 3mm; padding: 3mm 4mm; background: var(--acc-2); border-left: 1.4mm solid var(--acc); }
 .ex .body .wrong { display: block; color: var(--acc); margin-top: .8mm; }
 .legend .hl { font-size: 8.5pt; }
+
+/* ---- 산문(소설·비문학·문법) ---- */
+.prose { font-family: var(--serif); font-size: 10pt; line-height: 1.85; text-align: justify; word-break: keep-all; }
+.prose p { margin: 0 0 1.2mm; text-indent: 1em; }
+.prose p.skip { text-align: center; text-indent: 0; color: var(--ink-2); }
+.stu-prose { margin: 8mm auto 0; max-width: 160mm; }
+.stu-prose .stu-title { margin-bottom: 8mm; }
+.stu-para { display: grid; grid-template-columns: 8mm 1fr; align-items: baseline; margin-bottom: calc(var(--gap) * .6); break-inside: auto; }
+.stu-para .ln { font-family: var(--sans); font-size: 7.5pt; color: var(--ink-3); }
+.stu-para p { margin: 0; font-family: var(--serif); font-size: 11.5pt; line-height: calc(1.4em + var(--gap)); text-indent: 1em; text-align: justify; word-break: keep-all; }
+.tp.prose .tp-row { grid-template-columns: 1fr; gap: 2mm; }
+.tp.prose .tp-line { font-weight: 400; font-size: 10pt; line-height: 1.75; text-align: justify; word-break: keep-all; }
+.tp.prose .tp-notes { padding-left: 6mm; border-left: 1.2pt solid var(--acc-2); }
+
+/* ---------- 클리닉 성적표 (학생 1명 = A4 한 장) ---------- */
+.report { break-after: page; }
+.report:last-child { break-after: auto; }
+.rp-hero { display: grid; grid-template-columns: 52mm 1fr; gap: 8mm; align-items: center; margin: 5mm 0 6mm; padding: 5mm 7mm; background: var(--acc-2); border-radius: 2mm; }
+.rp-score { text-align: center; }
+.rp-score b { font-size: 34pt; font-weight: 800; color: var(--acc); line-height: 1; font-variant-numeric: tabular-nums; }
+.rp-score span { font-size: 13pt; color: var(--ink-2); margin-left: 1.5mm; }
+.rp-cap { font-size: 8.5pt; color: var(--ink-3); margin-top: 1.5mm; }
+.rp-meta { display: grid; gap: 1.8mm; }
+.rp-meta div { display: grid; grid-template-columns: 24mm 1fr; font-size: 10pt; }
+.rp-meta span { color: var(--ink-3); }
+.rp-h { font-weight: 800; font-size: 10.5pt; margin: 4mm 0 2.5mm; padding-left: 2.4mm; border-left: 1.2mm solid var(--acc); }
+.rp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8mm; }
+.rb { display: grid; grid-template-columns: 1fr; gap: .8mm; margin-bottom: 2.6mm; break-inside: avoid; }
+.rb-l { font-size: 8.8pt; color: var(--ink-2); }
+.rb-tag { display: inline-block; margin-left: 1.5mm; font-size: 7pt; font-weight: 700; color: #b3261e; border: .6pt solid #b3261e; border-radius: 1mm; padding: 0 1mm; vertical-align: 1pt; }
+.rb-track { position: relative; height: 3.4mm; background: #eceef1; border-radius: .6mm; margin-right: 18mm; }
+.rb-track i { display: block; height: 100%; background: var(--acc); border-radius: 0 1mm 1mm 0; }
+.rb.weak .rb-track i { background: #c0504d; }
+.rb-track b { position: absolute; top: -1mm; bottom: -1mm; width: .7mm; margin-left: -.35mm; background: var(--ink); }
+.rb { position: relative; }
+.rb-v { position: absolute; right: 0; bottom: -.6mm; font-size: 9pt; font-weight: 800; text-align: right; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.rb-v small { display: block; font-size: 6.8pt; font-weight: 400; color: var(--ink-3); }
+.rp-key { display: flex; gap: 6mm; font-size: 8pt; color: var(--ink-3); margin-top: -1mm; }
+.rp-key i { display: inline-block; vertical-align: middle; margin-right: 1.5mm; }
+.rp-key .k-me { width: 6mm; height: 2.4mm; background: var(--acc); border-radius: .5mm; }
+.rp-key .k-avg { width: .7mm; height: 3.4mm; background: var(--ink); }
+.rp-ox { display: grid; gap: 1.6mm; }
+.rp-oxrow { display: grid; grid-template-columns: 42mm 1fr; gap: 3mm; align-items: center; }
+.rp-oxl { font-size: 8.5pt; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rp-oxc { display: flex; flex-wrap: wrap; gap: 1mm; }
+.rp-oxc span { width: 8.4mm; height: 9mm; border: .6pt solid var(--rule); border-radius: .8mm; display: grid; place-items: center; font-weight: 800; font-size: 9.5pt; line-height: 1; padding-top: .6mm; }
+.rp-oxc span small { font-size: 6pt; font-weight: 400; color: var(--ink-3); }
+.rp-oxc span.o { color: var(--acc); }
+.rp-oxc span.x { color: #fff; background: #c0504d; border-color: #c0504d; }
+.rp-oxc span.x small { color: #fde; }
+.rp-weak { margin: 0; padding-left: 5mm; font-size: 9.5pt; line-height: 1.7; }
+.rp-comment { margin-top: 6mm; border: .8pt solid var(--acc); border-radius: 2mm; padding: 4mm 6mm 5mm; break-inside: avoid; }
+.rp-ch { font-weight: 800; color: var(--acc); font-size: 10.5pt; margin-bottom: 2mm; }
+.rp-cb { font-size: 10.2pt; line-height: 1.8; }
+.rp-sign { text-align: right; font-size: 9pt; color: var(--ink-2); margin-top: 3mm; }
+@media screen { .report + .report { margin-top: 14mm; padding-top: 10mm; border-top: 2px dashed #d6d2c8; } }

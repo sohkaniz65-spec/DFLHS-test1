@@ -6,7 +6,10 @@ import fs from 'node:fs/promises';
 import {
   ensureDirs, getSettings, updateSettings, getLibrary, readLibraryText, listProjects, getProject,
   saveNewProject, updateProject, deleteProject, newId, UPLOAD_TMP_DIR,
+  listExams, getExam, saveNewExam, updateExam, deleteExam,
 } from './lib/store.js';
+import { makePart, draftComments } from './lib/exam.js';
+import { parseOmrPaste, parseAnswerString, gradeExam, examQuestions } from './public/examStats.js';
 import { addUploadedFile, scanFolder, extractFiles, removeFolderFiles, deleteLibraryFile, ocrLibraryFile } from './lib/library.js';
 import { searchLibrary, suggestAliases, norm } from './lib/search.js';
 import {
@@ -16,6 +19,7 @@ import {
 import { apiStatus, initBackend, refreshAuth } from './lib/claude.js';
 import { startLogin, submitLoginCode } from './lib/claudeCode.js';
 import { renderPdf } from './lib/pdfExport.js';
+import { GENRES } from './lib/genres.js';
 
 await ensureDirs();
 await initBackend();
@@ -27,6 +31,8 @@ const upload = multer({ dest: UPLOAD_TMP_DIR, limits: { fileSize: 60 * 1024 * 10
 
 app.use(express.json({ limit: '20mb' }));
 app.use(express.static('public'));
+// 갈래 설정은 서버·화면이 같은 파일을 쓴다
+app.get('/genres.js', (req, res) => res.sendFile(path.resolve('lib/genres.js')));
 // 글꼴은 설치된 패키지에서 바로 제공 (인터넷 없이도 인쇄 디자인 유지)
 app.use('/fonts/pretendard', express.static('node_modules/pretendard/dist/web/variable'));
 app.use('/fonts/noto-serif-kr', express.static('node_modules/@fontsource/noto-serif-kr'));
@@ -57,8 +63,8 @@ app.post('/api/claude/login/code', wrap(async (req, res) => {
 
 app.get('/api/settings', wrap(async (req, res) => res.json(await getSettings())));
 app.put('/api/settings', wrap(async (req, res) => {
-  const { academyName, teacherName, accent, chip } = req.body;
-  res.json(await updateSettings((s) => ({ ...s, academyName: academyName ?? s.academyName, teacherName: teacherName ?? s.teacherName, accent: accent ?? s.accent, chip: chip ?? s.chip })));
+  const { academyName, teacherName, accent, chip, teacherVoice } = req.body;
+  res.json(await updateSettings((s) => ({ ...s, academyName: academyName ?? s.academyName, teacherName: teacherName ?? s.teacherName, accent: accent ?? s.accent, chip: chip ?? s.chip, teacherVoice: teacherVoice ?? s.teacherVoice })));
 }));
 
 // ---------- 자료실 ----------
@@ -176,11 +182,13 @@ app.get('/api/projects', wrap(async (req, res) => res.json(await listProjects())
 
 app.post('/api/projects', wrap(async (req, res) => {
   const { title, author = '', school = '', grade = '', examNote = '' } = req.body;
+  const genre = GENRES[req.body.genre] ? req.body.genre : '시';
   if (!title?.trim()) throw bad('작품 제목을 입력하세요.');
   const aliases = req.body.aliases?.length ? req.body.aliases : suggestAliases(title.trim());
   const now = new Date().toISOString();
   const project = {
-    id: newId('p_'), title: title.trim(), author, school, grade, examNote, aliases, poem: '',
+    id: newId('p_'), genre, title: title.trim(), author, school, grade, examNote, aliases, poem: '',
+    setCounts: {},
     createdAt: now, updatedAt: now,
     materials: { selected: [], lastSearchAt: null },
     notes: { entries: [], points: [], version: 0, draft: null, confirmedAt: null },
@@ -199,6 +207,14 @@ app.patch('/api/projects/:id', wrap(async (req, res) => {
   const allowed = ['title', 'author', 'school', 'grade', 'examNote', 'aliases', 'poem'];
   res.json(await updateProject(req.params.id, (p) => {
     for (const k of allowed) if (k in req.body) p[k] = req.body[k];
+    if (GENRES[req.body.genre]) p.genre = req.body.genre;
+    if (req.body.setCounts) {
+      p.setCounts = p.setCounts || {};
+      for (const k of ['clinic', 'homework']) {
+        const n = Number(req.body.setCounts[k]);
+        if (n >= 1 && n <= 150) p.setCounts[k] = Math.round(n);
+      }
+    }
   }));
 }));
 
@@ -374,6 +390,15 @@ app.put('/api/projects/:id/sets/:set/questions/:qid', wrap(async (req, res) => {
   res.json(p);
 }));
 
+app.put('/api/projects/:id/sets/:set/questions/:qid/skill', wrap(async (req, res) => {
+  const { id, set, qid } = req.params;
+  res.json(await updateProject(id, (p) => {
+    const q = p.sets[set]?.questions.find((x) => x.id === qid);
+    if (!q) throw bad('문항을 찾을 수 없습니다.');
+    q.skill = String(req.body.skill || '').slice(0, 40);
+  }));
+}));
+
 app.post('/api/projects/:id/sets/:set/accept-all-clean', wrap(async (req, res) => {
   res.json(await updateProject(req.params.id, (p) => {
     for (const q of p.sets[req.params.set]?.questions || []) {
@@ -438,6 +463,175 @@ app.get('/api/projects/:id/pdf/:doc', wrap(async (req, res) => {
     homework: '과제물100', 'homework-answers': '과제물정답해설',
   };
   const filename = `${p.title}_${names[doc] || doc}.pdf`;
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
+  res.end(pdf);
+}));
+
+// ---------- 클리닉 시험 (묶음 시험 · OMR 채점 · 학부모 성적표) ----------
+const examJobKey = (id) => 'exam:' + id;
+const withJobs = (e) => ({ ...e, jobs: listJobs(examJobKey(e.id)) });
+
+app.get('/api/exams', wrap(async (req, res) => res.json(await listExams())));
+
+app.post('/api/exams', wrap(async (req, res) => {
+  const now = new Date().toISOString();
+  const exam = {
+    id: newId('e_'),
+    title: String(req.body.title || '').trim() || '클리닉 테스트',
+    date: req.body.date || now.slice(0, 10),
+    className: req.body.className || '',
+    parts: [], students: [], createdAt: now, updatedAt: now,
+  };
+  res.json(await saveNewExam(exam));
+}));
+
+app.get('/api/exams/:id', wrap(async (req, res) => {
+  const e = await getExam(req.params.id);
+  if (!e) return res.status(404).json({ error: '없는 시험입니다.' });
+  res.json(withJobs(e));
+}));
+
+app.patch('/api/exams/:id', wrap(async (req, res) => {
+  res.json(withJobs(await updateExam(req.params.id, (e) => {
+    for (const k of ['title', 'date', 'className']) if (k in req.body) e[k] = String(req.body[k] || '');
+  })));
+}));
+
+app.delete('/api/exams/:id', wrap(async (req, res) => {
+  await deleteExam(req.params.id);
+  res.json({ ok: true });
+}));
+
+// 파트가 바뀌면 문항 수가 바뀌므로 학생 답을 새 번호에 맞게 옮긴다 (문항 ID 기준)
+function remapAnswers(before, after, students) {
+  const oldIds = examQuestions(before).map((q) => q.q.id + '@' + before.parts[q.partIndex].id);
+  const newIds = examQuestions(after).map((q) => q.q.id + '@' + after.parts[q.partIndex].id);
+  for (const st of students) {
+    const byId = new Map(oldIds.map((id, i) => [id, st.answers?.[i] ?? null]));
+    st.answers = newIds.map((id) => byId.get(id) ?? null);
+  }
+}
+
+async function changeParts(id, fn) {
+  const cur = await getExam(id);
+  if (!cur) throw bad('없는 시험입니다.');
+  const before = structuredClone(cur);
+  const parts = await fn(structuredClone(cur.parts));
+  return updateExam(id, (e) => {
+    e.parts = parts;
+    remapAnswers(before, e, e.students);
+  });
+}
+
+app.post('/api/exams/:id/parts', wrap(async (req, res) => {
+  const part = await makePart(req.body.projectId, { count: req.body.count });
+  res.json(withJobs(await changeParts(req.params.id, (parts) => [...parts, part])));
+}));
+
+app.put('/api/exams/:id/parts/:pid', wrap(async (req, res) => {
+  const { pid } = req.params;
+  res.json(withJobs(await changeParts(req.params.id, async (parts) => {
+    const i = parts.findIndex((p) => p.id === pid);
+    if (i < 0) throw bad('파트를 찾을 수 없습니다.');
+    if (req.body.move) {
+      const j = i + Number(req.body.move);
+      if (j >= 0 && j < parts.length) [parts[i], parts[j]] = [parts[j], parts[i]];
+      return parts;
+    }
+    // 문항 다시 고르기 / 작품 문항을 고친 뒤 새로 불러오기
+    const fresh = await makePart(parts[i].projectId, { count: req.body.count ?? parts[i].questions.length, questionIds: req.body.questionIds });
+    parts[i] = { ...fresh, id: parts[i].id };
+    return parts;
+  })));
+}));
+
+app.delete('/api/exams/:id/parts/:pid', wrap(async (req, res) => {
+  res.json(withJobs(await changeParts(req.params.id, (parts) => parts.filter((p) => p.id !== req.params.pid))));
+}));
+
+app.post('/api/exams/:id/students/paste', wrap(async (req, res) => {
+  const cur = await getExam(req.params.id);
+  if (!cur) throw bad('없는 시험입니다.');
+  const n = examQuestions(cur).length;
+  if (!n) throw bad('먼저 시험 구성에서 파트(작품)를 추가하세요.');
+  const rows = parseOmrPaste(req.body.text, n);
+  if (!rows.length) throw bad('학생 이름과 답을 찾지 못했습니다. 한 줄에 "이름 답" 형식인지 확인하세요. 예: 홍길동 13524 21453 …');
+  let added = 0;
+  let updated = 0;
+  const e = await updateExam(req.params.id, (ex) => {
+    for (const r of rows) {
+      const st = ex.students.find((x) => x.name === r.name);
+      if (st) { st.answers = r.answers; updated++; } else { ex.students.push({ id: newId('s_'), name: r.name, answers: r.answers, comment: '' }); added++; }
+    }
+  });
+  const short = rows.filter((r) => r.answers.filter((a) => a != null).length < n).map((r) => r.name);
+  res.json({ ...withJobs(e), pasteResult: { added, updated, short } });
+}));
+
+app.post('/api/exams/:id/students', wrap(async (req, res) => {
+  const name = String(req.body.name || '').trim();
+  if (!name) throw bad('학생 이름을 입력하세요.');
+  res.json(withJobs(await updateExam(req.params.id, (e) => {
+    if (e.students.some((s) => s.name === name)) throw bad('같은 이름의 학생이 이미 있습니다.');
+    e.students.push({ id: newId('s_'), name, answers: [], comment: '' });
+  })));
+}));
+
+app.put('/api/exams/:id/students/:sid', wrap(async (req, res) => {
+  res.json(withJobs(await updateExam(req.params.id, (e) => {
+    const st = e.students.find((s) => s.id === req.params.sid);
+    if (!st) throw bad('학생을 찾을 수 없습니다.');
+    if ('name' in req.body && String(req.body.name).trim()) st.name = String(req.body.name).trim();
+    if ('answers' in req.body) {
+      const n = examQuestions(e).length;
+      st.answers = Array.isArray(req.body.answers) ? req.body.answers.slice(0, n).map((a) => (a >= 1 && a <= 5 ? a : null)) : parseAnswerString(req.body.answers, n);
+    }
+    if ('comment' in req.body) { st.comment = String(req.body.comment || ''); st.commentEdited = true; }
+  })));
+}));
+
+app.delete('/api/exams/:id/students/:sid', wrap(async (req, res) => {
+  res.json(withJobs(await updateExam(req.params.id, (e) => {
+    e.students = e.students.filter((s) => s.id !== req.params.sid);
+  })));
+}));
+
+app.post('/api/exams/:id/comments', wrap(async (req, res) => {
+  const id = req.params.id;
+  const job = startJob(examJobKey(id), 'comments', '학부모 코멘트 쓰기', (progress) => draftComments(id, req.body.studentIds, progress));
+  res.json({ jobId: job.id });
+}));
+
+// 엑셀에서 바로 열리는 CSV (UTF-8 BOM)
+app.get('/api/exams/:id/csv', wrap(async (req, res) => {
+  const e = await getExam(req.params.id);
+  if (!e) throw bad('없는 시험입니다.');
+  const g = gradeExam(e);
+  const cell = (v) => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const head = ['이름', '점수', `만점`, ...e.parts.map((p) => p.label + ' 정답률(%)'), ...g.skills.map((k) => k + ' 정답률(%)'), ...g.questions.map((q) => q.no + '번'), '선생님 코멘트'];
+  const lines = [head.map(cell).join(',')];
+  for (const s of g.students) {
+    lines.push([s.name, s.graded ? s.score : '', g.n, ...s.parts.map((p) => (s.graded ? p.rate : '')), ...s.skills.map((k) => (s.graded ? k.rate : '')),
+      ...s.answers.map((a, i) => (a == null ? '' : `${a}${s.correct[i] ? '' : ' X'}`)), s.comment].map(cell).join(','));
+  }
+  lines.push(['반 평균', g.classAvg.score, g.n, ...g.classAvg.parts, ...g.skills.map((k) => g.classAvg.skills[k]), ...g.questions.map((q) => (q.rate == null ? '' : q.rate + '%')), ''].map(cell).join(','));
+  lines.push(['정답', '', '', ...e.parts.map(() => ''), ...g.skills.map(() => ''), ...g.questions.map((q) => q.answer), ''].map(cell).join(','));
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(`${e.title}_성적.csv`)}`);
+  res.end('﻿' + lines.join('\r\n'));
+}));
+
+app.get('/api/exams/:id/pdf/:doc', wrap(async (req, res) => {
+  const { id, doc } = req.params;
+  const e = await getExam(id);
+  if (!e) throw bad('없는 시험입니다.');
+  const student = /^s_[a-z0-9]+$/.test(req.query.student || '') ? `&student=${req.query.student}` : '';
+  const url = `http://127.0.0.1:${PORT}/print.html?exam=${encodeURIComponent(id)}&doc=${encodeURIComponent(doc)}${student}`;
+  const pdf = await renderPdf(url);
+  const who = student ? '_' + (e.students.find((s) => s.id === req.query.student)?.name || '') : '';
+  const names = { exam: '시험지', 'exam-answers': '정답해설', report: '성적표' + who, analysis: '문항분석' };
+  const filename = `${e.title}_${names[doc] || doc}.pdf`;
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(filename)}`);
   res.end(pdf);
